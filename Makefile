@@ -45,6 +45,13 @@ all: clean dev style checks dists test docs
 
 dev: clean-ln-venv ensure-pip pipenv-install-dev requirements ln-venv setup-githook \
 	 prepare-install install-dev-locale
+
+clean-venv:
+	rm -rf .venv
+
+dev-without-ln: clean-venv ensure-pip pipenv-install-dev requirements setup-githook \
+	 prepare-install install-dev-locale
+
 dev-actions: ensure-pip-system pipenv-install-dev requirements setup-githook prepare-install
 
 ensure-pip:
@@ -479,3 +486,38 @@ styles: style
 uninstall: uninstall-system
 upgrade: update
 wheel: wheels
+
+# ============================ xuananh - local ==========================
+# https://guake.readthedocs.io/en/latest/contributing/dev_env.html
+local-install-system-dependencies:
+	./scripts/bootstrap-dev-debian.sh run make
+
+local-run: # this command run with logging INFO
+	.venv/bin/python guake/main.py --no-startup-script
+
+local-run-logging-DEBUG:
+	.venv/bin/python guake/main.py --no-startup-script --verbose
+
+local-debug:
+	.venv/bin/python -m debugpy --listen 5678 guake/main.py --no-startup-script
+
+local-install-packages:
+	sudo apt install -y build-essential libdbus-glib-1-dev libgirepository1.0-dev \
+		pkg-config libcairo2-dev gcc python3-dev \
+		gettext 
+
+local-requirements:
+	.venv/bin/pip install -r requirements-local.txt
+
+local-prepare-environment: local-install-packages local-requirements setup-githook prepare-install install-dev-locale
+
+git-sync-origin-repo:
+	git remote add origin-repo https://github.com/Guake/guake.git ||:
+	git checkout master
+	git fetch origin-repo
+	git merge origin-repo/master
+
+git-amend-push:
+	git add .
+	git commit --amend --no-edit
+	git push origin -f

@@ -76,7 +76,6 @@ ChangeLog
 .direnv
 .envrc
 .venv
-.vscode/
 
 guake/data/gschemas.compiled
 .pytest_cache/
