@@ -272,6 +272,23 @@ class GuakeTerminal(Vte.Terminal):
                 directory = cwd
         return directory
 
+    def mapping_file_path(self, current_path) -> Path:
+        """xuananh
+        """
+        import json
+        cwd = self.get_current_directory()
+        path_mapping_configs = json.load(open(cwd + '/.guake.json', 'r'))
+        mapping_paths = path_mapping_configs.get("mapping_paths")
+        default_mapping = {
+            "/usr/local": cwd + "/.venv"
+        }
+        mapping_paths.update(default_mapping)
+        for key, value in mapping_paths.items():
+            if key in current_path:
+                new_path = current_path.replace(key, value, 1)  # NOTE: only replace the first occurenc
+                return new_path
+        return current_path
+
     def is_file_on_local_server(self, text) -> Tuple[Optional[Path], Optional[int], Optional[int]]:
         """Test if the provided text matches a file on local server
 
@@ -322,7 +339,7 @@ class GuakeTerminal(Vte.Terminal):
                     if line.startswith(f"def {py_func}"):
                         return i + 1
                         break
-
+        text = self.mapping_file_path(text)
         pt = Path(text)
         log.debug("checking file existance: %r", pt)
         try:
@@ -410,6 +427,8 @@ class GuakeTerminal(Vte.Terminal):
         use_quick_open = self.guake.settings.general.get_boolean("quick-open-enable")
         if use_quick_open:
             found_matcher = self._find_quick_matcher(value)
+        else:
+            log.warning("xuananh ============> NOTE: quick-open by vscode is not enabled, go to reference to setup quick open with vscode with syntax: code -g %(file_path)s:%(line_number)s")
         if not found_matcher:
             self.found_link = self.handleTerminalMatch(matched_string)
             if self.found_link:
@@ -436,10 +455,23 @@ class GuakeTerminal(Vte.Terminal):
                 return True
         return False
 
+    def _get_custom_quick_open_cmd(self) -> str:
+        """xuananh
+        """
+        import json
+        cwd = self.get_current_directory()
+        path_mapping_configs = json.load(open(cwd + '/.guake.json', 'r'))
+        quick_open_cmd = path_mapping_configs.get("quick_open_cmd")
+        return quick_open_cmd
+    
     def _execute_quick_open(self, filepath, line_number):
         if not filepath:
             return
-        cmdline = self.guake.settings.general.get_string("quick-open-command-line")
+        
+        cmdline = self._get_custom_quick_open_cmd()
+        if not cmdline:
+            cmdline = self.guake.settings.general.get_string("quick-open-command-line")
+
         if not line_number:
             line_number = ""
         else:
