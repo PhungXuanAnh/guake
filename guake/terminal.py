@@ -262,7 +262,7 @@ class GuakeTerminal(Vte.Terminal):
         cwd = self.get_current_directory()
         mapping = {
             "/code": cwd,
-            "/usr/local": cwd + ".venv/lib/python3.9"
+            "/usr/local": cwd + "/.venv"
         }
         for key, value in mapping.items():
             if key in current_path:
