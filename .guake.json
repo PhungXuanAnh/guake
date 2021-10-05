@@ -1,0 +1,6 @@
+{
+    "quick_open_cmd": "code -g %(file_path)s:%(line_number)s",
+    "mapping_paths": {
+        "/app": "/home/xuananh/repo/guake/guake"
+    }
+}
