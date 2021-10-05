@@ -258,6 +258,18 @@ class GuakeTerminal(Vte.Terminal):
                 directory = cwd
         return directory
 
+    def mapping_file_path(self, current_path) -> Path:
+        cwd = self.get_current_directory()
+        mapping = {
+            "/code": cwd,
+            "/usr/local": cwd + ".venv/lib/python3.9"
+        }
+        for key, value in mapping.items():
+            if key in current_path:
+                new_path = current_path.replace(key, value)
+                return new_path
+        return current_path
+
     def is_file_on_local_server(self, text) -> Tuple[Optional[Path], Optional[int], Optional[int]]:
         """Test if the provided text matches a file on local server
 
@@ -310,7 +322,7 @@ class GuakeTerminal(Vte.Terminal):
                     if line.startswith(f"def {py_func}"):
                         return i + 1
                         break
-
+        text = self.mapping_file_path(text)
         pt = Path(text)
         log.debug("checking file existance: %r", pt)
         try:

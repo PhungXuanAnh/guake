@@ -45,6 +45,13 @@ all: clean dev style checks dists test docs
 
 dev: clean-ln-venv ensure-pip pipenv-install-dev requirements ln-venv setup-githook \
 	 prepare-install install-dev-locale
+
+clean-venv:
+	rm -rf .venv
+
+dev-without-ln: clean-venv ensure-pip pipenv-install-dev requirements setup-githook \
+	 prepare-install install-dev-locale
+
 dev-actions: ensure-pip-system pipenv-install-dev requirements setup-githook prepare-install
 
 ensure-pip:
@@ -479,3 +486,6 @@ styles: style
 uninstall: uninstall-system
 upgrade: update
 wheel: wheels
+
+run-debug:
+	.venv/bin/python -m debugpy --listen 5678 guake/main.py --no-startup-script
