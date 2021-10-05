@@ -68,7 +68,7 @@ if [[ $DEV == "1" ]]; then
         dconf-editor \
         glade \
         poedit \
-        gnome-tweak-tool
+        gnome-tweaks
 fi
 
 if [[ $OPT == "1" ]]; then

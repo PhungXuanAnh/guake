@@ -440,3 +440,44 @@ styles: style
 uninstall: uninstall-system
 upgrade: update
 wheel: wheels
+
+# ============================ xuananh - local ==========================
+# https://guake.readthedocs.io/en/latest/contributing/dev_env.html
+local-install-system-dependencies:
+	./scripts/bootstrap-dev-debian.sh run make
+
+local-run: # this command run with logging INFO
+	.venv/bin/python guake/main.py --no-startup-script
+
+local-run-logging-DEBUG:
+	.venv/bin/python guake/main.py --no-startup-script --verbose
+
+local-debug:
+	.venv/bin/python -m debugpy --listen 5678 guake/main.py --no-startup-script --verbose
+
+local-install-packages:
+	sudo apt install -y build-essential libdbus-glib-1-dev libgirepository1.0-dev \
+		pkg-config libcairo2-dev gcc python3-dev \
+		gettext 
+
+local-requirements:
+	.venv/bin/pip install -r requirements-dev.txt
+	.venv/bin/pip install dbus-python
+	.venv/bin/pip install vext==0.7.6
+	.venv/bin/pip install vext.gi==0.7.4
+	.venv/bin/pip install gobject==0.1.0
+	.venv/bin/pip install PyGObject==3.46.0
+	.venv/bin/pip install debugpy dataclasses 
+
+local-prepare-environment: local-install-packages local-requirements prepare-install install-dev-locale
+
+git-sync-origin-repo:
+	git remote add origin-repo https://github.com/Guake/guake.git ||:
+	git checkout master
+	git fetch origin-repo
+	git merge origin-repo/master
+
+git-amend-push:
+	git add .
+	git commit --amend --no-edit
+	git push origin -f
