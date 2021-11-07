@@ -1,3 +1,6 @@
+-r requirements-dev.txt
+dbus-python
 vext
 vext.gi
-dbus-python
+gobject 
+PyGObject

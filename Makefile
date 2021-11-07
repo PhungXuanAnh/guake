@@ -487,5 +487,23 @@ uninstall: uninstall-system
 upgrade: update
 wheel: wheels
 
-run-debug:
+# =============================================== local ==========================
+
+local-run:
+	.venv/bin/python guake/main.py --no-startup-script
+
+local-debug:
 	.venv/bin/python -m debugpy --listen 5678 guake/main.py --no-startup-script
+
+local-install-packages:
+	sudo apt install -y build-essential libdbus-glib-1-dev libgirepository1.0-dev \
+		pkg-config libcairo2-dev gcc python3-dev \
+		gettext 
+
+local-requirements:
+	.venv/bin/pip install -r requirements-local.txt
+
+local-prepare-environment: local-install-packages local-requirements setup-githook prepare-install install-dev-locale
+
+local-sync-remote:
+	echo ""
