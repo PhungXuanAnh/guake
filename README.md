@@ -1,18 +1,20 @@
-- [1. debug on local](#1-debug-on-local)
+- [1. run on local](#1-run-on-local)
   - [1.1. prepare environment](#11-prepare-environment)
-  - [1.2. step to debug](#12-step-to-debug)
+  - [1.2. debug](#12-debug)
 
-# 1. debug on local
+# 1. run on local
 
 ## 1.1. prepare environment
 
 ```shell
-make dev-without-ln
-source .venv/bin/activate
-pip install requirement-local.txt
+pyenv local 3.9.0
+venv-create
+
+make local-prepare-environment
+make local-run
 ```
 
-## 1.2. step to debug
+## 1.2. debug
 
 1. run guake with debugpy
 
