@@ -508,5 +508,9 @@ local-requirements:
 
 local-prepare-environment: local-install-packages local-requirements setup-githook prepare-install install-dev-locale
 
-local-sync-remote:
-	echo "------------"
+local-git-add-remote:
+	git remote add upstream https://github.com/Guake/guake.git
+
+local-git-sync-remote:
+	git fetch upstream
+	git merge upstream/master
