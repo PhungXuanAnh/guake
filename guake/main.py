@@ -41,8 +41,13 @@ from optparse import OptionParser
 
 log = logging.getLogger(__name__)
 
-# Force use X11 backend under wayland before any import of GDK through dependencies
+# Force use X11 backend under wayland before any import of GDK through dependencies.
+# This could fix weird problems under Wayland.
+# But if user set the environment variable GUAKE_ENABLE_WAYLAND, then force
+# use Wayland backend.
 os.environ["GDK_BACKEND"] = "x11"
+if "GUAKE_ENABLE_WAYLAND" in os.environ:
+    os.environ["GDK_BACKEND"] = "wayland"
 
 from guake.globals import NAME
 from guake.globals import bindtextdomain
@@ -115,6 +120,14 @@ def main():
         action="store_true",
         default=False,
         help=_("Toggles the visibility of the terminal window"),
+    )
+
+    parser.add_option(
+        "--is-visible",
+        dest="is_visible",
+        action="store_true",
+        default=False,
+        help=_("Return 1 if Guake is visible, 0 otherwise"),
     )
 
     parser.add_option(
@@ -403,7 +416,6 @@ def main():
             "        python3 \\\n"
             "        python3-dbus \\\n"
             "        python3-gi \\\n"
-            "        python3-pbr \\\n"
             "        python3-pip"
         )
         sys.exit(1)
@@ -481,6 +493,11 @@ def main():
 
     if options.hide:
         remote_object.hide_from_remote()
+
+    if options.is_visible:
+        visibility = remote_object.get_visibility()
+        sys.stdout.write(f"{visibility}\n")
+        only_show_hide = options.show
 
     if options.show_preferences:
         remote_object.show_prefs()
