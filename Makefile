@@ -489,8 +489,11 @@ wheel: wheels
 
 # =============================================== local ==========================
 
-local-run:
+local-run: # this command run with logging INFO
 	.venv/bin/python guake/main.py --no-startup-script
+
+local-run-logging-DEBUG:
+	.venv/bin/python guake/main.py --no-startup-script --verbose
 
 local-debug:
 	.venv/bin/python -m debugpy --listen 5678 guake/main.py --no-startup-script
@@ -506,4 +509,4 @@ local-requirements:
 local-prepare-environment: local-install-packages local-requirements setup-githook prepare-install install-dev-locale
 
 local-sync-remote:
-	echo ""
+	echo "------------"
