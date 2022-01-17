@@ -404,6 +404,7 @@ class GuakeTerminal(Vte.Terminal):
         log.debug("matched string: %s", matched_string)
         # First searching in additional matchers
         use_quick_open = self.guake.settings.general.get_boolean("quick-open-enable")
+        log.warning("xuananh ============> NOTE: quick-open by vscode is not enabled, go to reference to setup quick open with vscode with syntax: code -g %(file_path)s:%(line_number)s")
         if use_quick_open:
             found_matcher = self._find_quick_matcher(value)
         if not found_matcher:
