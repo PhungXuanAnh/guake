@@ -259,12 +259,16 @@ class GuakeTerminal(Vte.Terminal):
         return directory
 
     def mapping_file_path(self, current_path) -> Path:
+        """xuananh
+        """
+        import json
         cwd = self.get_current_directory()
-        mapping = {
-            "/code": cwd,
+        mapping_paths = json.load(open(cwd + '/.guake_mapping_path.json', 'r'))
+        default_mapping = {
             "/usr/local": cwd + "/.venv"
         }
-        for key, value in mapping.items():
+        mapping_paths.update(default_mapping)
+        for key, value in mapping_paths.items():
             if key in current_path:
                 new_path = current_path.replace(key, value)
                 return new_path
@@ -404,9 +408,10 @@ class GuakeTerminal(Vte.Terminal):
         log.debug("matched string: %s", matched_string)
         # First searching in additional matchers
         use_quick_open = self.guake.settings.general.get_boolean("quick-open-enable")
-        log.warning("xuananh ============> NOTE: quick-open by vscode is not enabled, go to reference to setup quick open with vscode with syntax: code -g %(file_path)s:%(line_number)s")
         if use_quick_open:
             found_matcher = self._find_quick_matcher(value)
+        else:
+            log.warning("xuananh ============> NOTE: quick-open by vscode is not enabled, go to reference to setup quick open with vscode with syntax: code -g %(file_path)s:%(line_number)s")
         if not found_matcher:
             self.found_link = self.handleTerminalMatch(matched_string)
             if self.found_link:
