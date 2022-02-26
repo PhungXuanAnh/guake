@@ -28,8 +28,8 @@ import traceback
 import uuid
 
 from pathlib import Path
-from time import sleep
 from threading import Thread
+from time import sleep
 from urllib.parse import quote_plus
 from xml.sax.saxutils import escape as xml_escape
 
@@ -457,14 +457,11 @@ class Guake(SimpleGladeApp):
             self.set_colors_from_settings()
 
     def execute_command(self, command, tab=None):
-        # TODO DBUS_ONLY
         """Execute the `command' in the `tab'. If tab is None, the
         command will be executed in the currently selected
         tab. Command should end with '\n', otherwise it will be
         appended to the string.
         """
-        # TODO CONTEXTMENU this has to be rewriten and only serves the
-        # dbus interface, maybe this should be moved to dbusinterface.py
         if not self.get_notebook().has_page():
             self.add_tab()
 
@@ -475,7 +472,6 @@ class Guake(SimpleGladeApp):
         terminal.feed_child(command)
 
     def execute_command_by_uuid(self, tab_uuid, command):
-        # TODO DBUS_ONLY
         """Execute the `command' in the tab whose terminal has the `tab_uuid' uuid"""
         if command[-1] != "\n":
             command += "\n"
@@ -617,22 +613,29 @@ class Guake(SimpleGladeApp):
             and self.window.get_property("visible")
         ):
             pass
-        elif not self.settings.general.get_boolean("window-losefocus"):
-            if self.losefocus_time and self.losefocus_time < event_time:
-                if (
-                    self.window.get_window()
-                    and self.window.get_property("visible")
-                    and not self.window.get_window().get_state() & Gdk.WindowState.FOCUSED
-                ):
-                    log.debug("DBG: Restoring the focus to the terminal")
-                    self.window.get_window().focus(event_time)
-                    self.set_terminal_focus()
-                    self.losefocus_time = 0
-                    return False
-        elif self.losefocus_time and self.settings.general.get_boolean("window-losefocus"):
-            if self.losefocus_time >= event_time and (self.losefocus_time - event_time) < 10:
+        elif (
+            self.losefocus_time
+            and not self.settings.general.get_boolean("window-losefocus")
+            and self.losefocus_time < event_time
+        ):
+            if (
+                self.window.get_window()
+                and self.window.get_property("visible")
+                and not self.window.get_window().get_state() & Gdk.WindowState.FOCUSED
+            ):
+                log.debug("DBG: Restoring the focus to the terminal")
+                self.window.get_window().focus(event_time)
+                self.set_terminal_focus()
                 self.losefocus_time = 0
                 return False
+        elif (
+            self.losefocus_time
+            and self.settings.general.get_boolean("window-losefocus")
+            and self.losefocus_time >= event_time
+            and (self.losefocus_time - event_time) < 10
+        ):
+            self.losefocus_time = 0
+            return False
 
         # limit rate at which the visibility can be toggled.
         if self.prev_showhide_time and event_time and (event_time - self.prev_showhide_time) < 65:
@@ -729,12 +732,6 @@ class Guake(SimpleGladeApp):
         self.window.get_window().focus(time)
         self.window.set_type_hint(Gdk.WindowTypeHint.DOCK)
         self.window.set_type_hint(Gdk.WindowTypeHint.NORMAL)
-
-        # log.debug("Restoring skip_taskbar_hint and skip_pager_hint")
-        # if is_iconified:
-        #     self.get_widget('window-root').set_skip_taskbar_hint(False)
-        #     self.get_widget('window-root').set_skip_pager_hint(False)
-        #     self.get_widget('window-root').set_urgency_hint(False)
 
         # This is here because vte color configuration works only after the
         # widget is shown.
@@ -1259,12 +1256,6 @@ class Guake(SimpleGladeApp):
         current_term.search_set_gregex()
         current_term.search_get_gregex()
 
-        # buffer = self.text_view.get_buffer()
-        # if response_id == RESPONSE_FORWARD:
-        #     buffer.search_forward(search_string, self)
-        # elif response_id == RESPONSE_BACKWARD:
-        #     buffer.search_backward(search_string, self)
-
     def page_deleted(self, *args):
         if not self.get_notebook().has_page():
             self.hide()
@@ -1299,7 +1290,7 @@ class Guake(SimpleGladeApp):
             search_query = guake_clipboard.wait_for_text()
             search_query = quote_plus(search_query)
             if search_query:
-                # TODO search provider should be selectable (someone might
+                # TODO: search provider should be selectable (someone might
                 # prefer bing.com, the internet is a strange place ¯\_(ツ)_/¯ )
                 search_url = f"https://www.google.com/search?q={search_query}&safe=off"
                 Gtk.show_uri(self.window.get_screen(), search_url, get_server_time(self.window))
@@ -1355,16 +1346,15 @@ class Guake(SimpleGladeApp):
             for index in range(nb.get_n_pages()):
                 try:
                     page = nb.get_nth_page(index)
-                    if page.child:
-                        panes = []
-                        page.save_box_layout(page.child, panes)
-                        tabs.append(
-                            {
-                                "panes": panes,
-                                "label": nb.get_tab_text_index(index),
-                                "custom_label_set": getattr(page, "custom_label_set", False),
-                            }
-                        )
+                    panes = []
+                    page.save_box_layout(page.child, panes)
+                    tabs.append(
+                        {
+                            "panes": panes,
+                            "label": nb.get_tab_text_index(index),
+                            "custom_label_set": getattr(page, "custom_label_set", False),
+                        }
+                    )
                 except FileNotFoundError:
                     # discard same broken tabs
                     pass
@@ -1449,18 +1439,18 @@ class Guake(SimpleGladeApp):
                 # NOTE: If frame implement in future, we will need to update this code
                 for tabs in frames:
                     for index, tab in enumerate(tabs):
-                        directory = (
-                            tab["panes"][0]["directory"]
-                            if len(tab.get("panes", [])) == 1
-                            else tab.get("directory", None)
-                        )
-                        box, page_num, term = nb.new_page_with_focus(
-                            directory, tab["label"], tab["custom_label_set"]
-                        )
                         if tab.get("panes", False):
-                            # if directory:
-                            #     continue
+                            box, page_num, term = nb.new_page_with_focus(
+                                label=tab["label"], user_set=tab["custom_label_set"], empty=True
+                            )
                             box.restore_box_layout(box.child, tab["panes"])
+                        else:
+                            directory = (
+                                tab["panes"][0]["directory"]
+                                if len(tab.get("panes", [])) == 1
+                                else tab.get("directory", None)
+                            )
+                            nb.new_page_with_focus(directory, tab["label"], tab["custom_label_set"])
 
                     # Remove original pages in notebook
                     for i in range(current_pages):

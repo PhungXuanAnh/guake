@@ -1,16 +1,15 @@
+Guake Change Log
+################
+
+3.8.5
 =====
-guake
-=====
 
-(unreleased yet)
-================
+New Features
+------------
 
-Release Summary
----------------
+- ``--is-visible`` option returns 1 when visible, and 0 when not
 
-Fix system font application issue
-
-Use keycodes instead of keyvals for keybindings. This allow to use keybindings with different keyboard layouts.
+- Double click to open a new tab, without side effects in mouse enabled terminal apps
 
 Known Issues
 ------------
@@ -20,7 +19,73 @@ Known Issues
 Bug Fixes
 ---------
 
-- - System font aplied only for last tab #1947 
+- Changed Toggle Hide on Lose Focus Shortcut to Shift-Ctrl-F1.
+  Instead of change Go to tab1 shortcut, because Ctrl-F1 is in the pool Ctrl-Fn of change to tabs.
+
+- Fix issue Ctrl+F1 does two jobs in Keyboard Shortcuts Page
+
+- Add environment variable GUAKE_ENABLE_WAYLAND, fixed #1934
+
+- System font applied only for last tab #1947
+
+- Guake suddenly not starting any more due to ``ModuleNotFoundError: No module named 'importlib_metadata'`` #1962
+
+- Fix vte ``spawn_sync`` runtime check failed: ((spawn_flags & ignored_spawn_flags()) == 0)
+
+- Fix the way PBR computes the package version.
+
+- Eliminated redundant terminal spawning on startup
+
+- Fix system font application issue
+
+- Add fallback for version number finding
+
+- Reinstated double clicking to open new tabs
+
+- Use keycodes instead of keyvals for keybindings. This allow to use keybindings with different keyboard layouts.
+
+Notes for Package Maintainers
+-----------------------------
+
+- Switched from importlib + pbr to setuptools_scm for versioning
+
+Other
+-----
+
+- Fix for release pipeline.
+
+Security Issues
+---------------
+
+- Fixed security Issue: Exposure of sensitive function, malicious user can arbitrary command via an execute_command d-bus method. #1796
+
+Translation Updates
+-------------------
+
+- Chinese Simplified (@kitty-panics)
+- Croatian (@milotype)
+- Dutch (@Vistaus)
+- German (@m1ga, @rMb93)
+- Indonesian (@rezaalmanda)
+- Polish (@piotrdrag)
+- Russian (@vantu5z)
+- Swedish (@MorganAntonsson)
+- Turkish (@Draconis-25, @ersen0)
+
+3.8.4
+=====
+
+Unreleased.
+
+3.8.3
+=====
+
+Unreleased.
+
+3.8.2
+=====
+
+Unreleased.
 
 3.8.1
 =====
@@ -39,9 +104,9 @@ Moved guake.desktop.metainfo.xml to $datadir
 New Features
 ------------
 
-- - Feature request: Setting line-spacing / line-height #849 
+- - Feature request: Setting line-spacing / line-height #849
 
-- - Support of short term focus loss and avoid folding #1643 
+- - Support of short term focus loss and avoid folding #1643
 
 Bug Fixes
 ---------
@@ -69,7 +134,7 @@ Stopped setting GDK_BACKEND to x11 in terminals.
 Bug Fixes
 ---------
 
-- - GDK_BACKEND is propagated to the shell in terminal #1871 
+- - GDK_BACKEND is propagated to the shell in terminal #1871
 
 Translation Updates
 -------------------
@@ -128,12 +193,12 @@ New Features
 - - Now defaults to system default theme
   - New option to still allow independently setting guake's theme.
 
-- - "copy on selection" option even if the desktop doesn't do it #43 
-  - copy text on selection #1898 
+- - "copy on selection" option even if the desktop doesn't do it #43
+  - copy text on selection #1898
 
 - Added Gruvbox dark
 
-- - Allow Ctrl-Tab as an accelerator #152 
+- - Allow Ctrl-Tab as an accelerator #152
 
 - - Automatically hide the tab bar when there is only one tab #924
 
@@ -143,10 +208,10 @@ New Features
   attempting to maximize the window.
 
 - Re-implemented the refocus functionality.
-      
+
   This functionality allows the user to return the focus to an open guake window.
   It happened to be partially be maintained but faced issues in the migration to Gtk3.
-      
+
   The functionality was revived, partially based on commented-out code found in Guake.show_hide().
 
 - Bring back GUAKE_TAB_UUID
@@ -208,11 +273,11 @@ Bug Fixes
 
 - - Fixes #1863
 
-- - Minimal Right Click Menu, no copy or split screen #1845 
+- - Minimal Right Click Menu, no copy or split screen #1845
 
 - Update search box to work with updated regex vte apis for v0.46+, #1752
 
-- - Open with URL includes trailing single quote (invalid URL) #1624 
+- - Open with URL includes trailing single quote (invalid URL) #1624
 
 - - Update `session.json` when directory changed, not terminal title changed #1633
 
@@ -226,12 +291,12 @@ Notes for Package Maintainers
 - Should resolve issues with the gschemas.compiled file. Make sure that the location
   org.guake.gschema.xml is being saved to is user executable if guake is installed in
   userspace so that guake can compile and create gschemas.compiled.
-  
+
   If the destination for org.guake.gschema.xml cannot be user executable, make sure to
   include:
-  
+
   glib-compile-schemas [schema directory]
-  
+
   In the installation script, replacing [schema directory] with the place
   org.guake.gschema.xml is being saved.
 
@@ -261,7 +326,7 @@ New Features
 - Add fullscreen hide tabbar option
 
 - List new features here followed by the ticket number, for example::
-  
+
     - Resetting colors of the current page.
     - Setting of background and foreground colors and resetting colors of the focused terminal.
 
@@ -382,7 +447,7 @@ New Features
 ------------
 
 - List new features here followed by the ticket number, for example::
-  
+
     - RFE: Open new tab next to current tab #582
 
 Bug Fixes
@@ -448,7 +513,7 @@ New Features
 - Add search box for terminal. Default hotkey is ``Ctrl+Shift+F``.
 
 - Add session save preferences for startup/tabs:
-  
+
     - "restore-tabs-startup": when enabled, it will restore tabs when startup
     - "restore-tabs-notify": when enabled, it will notify user after tabs restored (except startup)
     - "save-tabs-when-changed": when enabled, it will automatically save tabs session
@@ -538,7 +603,7 @@ Bug Fixes
 
 - Fix command-line select tab behavior #1492
 
-- removed duplicate event bind? previously I had issue where quick-open event would be fired 
+- removed duplicate event bind? previously I had issue where quick-open event would be fired
   twice because of this.
 
 - fixes
@@ -741,7 +806,7 @@ Bug Fixes
 
 - Wayland is a bit more well supported. The X11 backend is now used by default for
   GDK and it seems to make the shortcut works under most situation.
-  
+
   A more cleaner solution would be to develop a GAction
   (`vote for this feature here <https://feathub.com/Guake/guake/+29>`_])
 
@@ -808,10 +873,10 @@ Bug Fixes
   This may causes some issues with log and so that use parenthesis *around* hyperlinks,
   but since parenthesis and quotes are valid characters inside a URL, like for instance
   URL created by Kibana, they deserve the right to be shown as proper url in Guake.
-  
+
   User can still select the URL in the terminal if he wishes to capture the exact url, before
   doing a Ctrl+click or a right click.
-  
+
   For developers, it is advised to end the URL with a character that cannot be used in URL, such
   as space, tab, new line. Ending with a dot (``.``) or a comma (``,``) will not be seen as part
   of the URL by Guake, so most logs and traces that adds a dot or a comma at the end of the URL
@@ -887,7 +952,7 @@ New Features
 
 - Add great color palettes from
   `Guake Color Scheme <https://github.com/ziyenano/Guake-Color-Schemes>`_, thanks for @ziyenano :
-  
+
     - `Aci`,
     - `aco`,
     - `Azu`,
@@ -930,17 +995,17 @@ Bug Fixes
 - change scope of ``which_align`` variable in ``pref.py`` (#1225)
 
 - Fix several issues on Quick Edit:
-  
+
   - quick open freezes guake
   - support for systems with PCRE2 (regular expression in terminal) disabled for VTE, like
     Ubuntu 17.10 and +.
-  
+
     This might disable quick open and open url on direct Ctrl+click.
     User can still select the wanted url or text and Cltr+click or use contextual menu.
-  
+
     See this `discussion on Tilix <https://github.com/gnunn1/tilix/issues/916>`_, another
     Terminal emulator that suffurs the same issue.
-  
+
   - quick open now appears in contextual menu (#1157)
   - bad translation update on the contextual menu. This causes new strings that was hidden to
     appear for translators.
@@ -972,28 +1037,28 @@ Notes for Package Maintainers
 - The setup mecanism has changed a little bit. Some maintainers used to patch the source code
   of Guake to change the pixmap, Gtk schema or locale paths directly in the ``guake/globals.py``
   file. This was due to a lack of flexibility of the installation target of the ``Makefile``.
-  
+
   The ``make install`` target looks now a little bit more familiar, allowing distribution
   packager to set the various paths directly with make flags.
-  
+
   For example:
-  
+
   .. code-block:: bash
-  
+
       sudo make install \
           prefix=/usr \
           DESTDIR=/path/for/packager \
           PYTHON_SITE_PACKAGE_NAME=site-package \
           localedir=/usr/share/locale
-  
+
   The main overrides are:
-  
+
   - ``IMAGE_DIR``: where the pixmap should be installed. Default: ``/usr/local/share/guake/pixmaps``
   - ``localedir``: where locales should be installed. Default: ``/usr/local/share/locale``
   - ``GLADE_DIR``: where the Glade files should be installed. Default: ``/usr/local/share/guake``
   - ``gsettingsschemadir``: where gsettings/dconf schema should be installed.
     Default: ``/usr/local/share/glib-2.0/schemas/``
-  
+
   I invite package maintainers to open tickets on Github about any other difficulties
   encountered when packaging Guake.
 
@@ -1044,10 +1109,10 @@ New Features
   to virtually open any file path in your terminal (if they are on your local machine), but
   requires the user to select the file path first, compared to the Quick Open feature that
   finds file names using regular expression.
-  
+
   Also notes that is it able to look in the current folder if the selected file name exists,
   allowing Ctrl+click on relative paths as well.
-  
+
   Line number syntax is also supported: ``filename.txt:5`` will directly on the 5th line if
   your Quick Open is set for.
 
@@ -1198,7 +1263,7 @@ New Features
 ------------
 
 - Ported to GTK3:
-  
+
     - cli arguments
     - D-Bus
     - context menu of the terminal, the tab bar and the tray icon
@@ -1216,7 +1281,7 @@ New Features
     - ``Guake.accel*`` methods
 
 - Guake now use a brand new build system:
-  
+
     - ``pipenv`` to manage dependencies in `Pipfile`
     - enforced code styling and checks using Pylint, Flake8, Yapf, ISort.
     - simpler release management thanks to PBR
