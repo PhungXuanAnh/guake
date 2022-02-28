@@ -441,7 +441,7 @@ uninstall: uninstall-system
 upgrade: update
 wheel: wheels
 
-# =============================================== local ==========================
+# ============================ xuananh - local ==========================
 # https://guake.readthedocs.io/en/latest/contributing/dev_env.html
 local-install-system-dependencies:
 	./scripts/bootstrap-dev-debian.sh run make
