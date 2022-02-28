@@ -64,7 +64,7 @@ Ctrl + click to "app/main.py", it will open [guake/main.py](guake/main.py) on vs
 Run guake by command:
 
 ```shell
-GTK_DEBUG=interactive m local-run
+GTK_DEBUG=interactive make local-run
 ```
 
 it will run guake and GTK Inspector :
