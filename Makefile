@@ -488,6 +488,9 @@ upgrade: update
 wheel: wheels
 
 # =============================================== local ==========================
+# https://guake.readthedocs.io/en/latest/contributing/dev_env.html
+local-install-system-dependencies:
+	./scripts/bootstrap-dev-debian.sh run make
 
 local-run: # this command run with logging INFO
 	.venv/bin/python guake/main.py --no-startup-script
