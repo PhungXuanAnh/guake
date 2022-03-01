@@ -263,7 +263,7 @@ class GuakeTerminal(Vte.Terminal):
         """
         import json
         cwd = self.get_current_directory()
-        mapping_paths = json.load(open(cwd + '/.guake_mapping_path.json', 'r'))
+        mapping_paths = json.load(open(cwd + '/.guake.json', 'r'))
         default_mapping = {
             "/usr/local": cwd + "/.venv"
         }

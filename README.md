@@ -51,7 +51,7 @@ Traceback (most recent call last):
     strategy = strategies[type_]
 ```
 
-Ctrl + click to "app/main.py", it will open [guake/main.py](guake/main.py) on vscode based on setting in file [.guake_mapping_path.json](.guake_mapping_path.json)
+Ctrl + click to "app/main.py", it will open [guake/main.py](guake/main.py) on vscode based on setting in file [.guake.json](.guake.json)
 
 # 3. change stk css style
 
