@@ -75,6 +75,7 @@ def main():
     """
     # Force to xterm-256 colors for compatibility with some old command line programs
     os.environ["TERM"] = "xterm-256color"
+    os.environ["TERM_PROGRAM"] = "guake"
 
     # do not use version keywords here, pbr might be slow to find the version of Guake module
     parser = OptionParser()
@@ -192,6 +193,15 @@ def main():
     )
 
     parser.add_option(
+        "-x",
+        "--uuid-index",
+        dest="uuid_index",
+        action="store",
+        default="",
+        help=_("Return the index of the tab with the given terminal UUID, -1 if not found"),
+    )
+
+    parser.add_option(
         "-l",
         "--selected-tablabel",
         dest="selected_tablabel",
@@ -243,7 +253,7 @@ def main():
         dest="command",
         action="store",
         default="",
-        help=_("Execute an arbitrary command in the selected tab."),
+        help=_("Execute an arbitrary command in a new tab."),
     )
 
     parser.add_option(
@@ -503,7 +513,7 @@ def main():
         remote_object.show_prefs()
         only_show_hide = options.show
 
-    if options.new_tab:
+    if options.new_tab and not options.command:
         remote_object.add_tab(options.new_tab)
         only_show_hide = options.show
 
@@ -524,6 +534,11 @@ def main():
     if options.selected_tablabel:
         selectedlabel = remote_object.get_selected_tablabel()
         sys.stdout.write(f"{selectedlabel}\n")
+        only_show_hide = options.show
+
+    if options.uuid_index:
+        selectedIndex = remote_object.get_index_from_uuid(options.uuid_index)
+        sys.stdout.write(f"{selectedIndex}\n")
         only_show_hide = options.show
 
     if options.split_vertical:
@@ -612,15 +627,15 @@ def main():
             startup_script = instance.settings.general.get_string("startup-script")
             if startup_script:
                 log.info("Calling startup script: %s", startup_script)
-                with subprocess.Popen(
+                pid = subprocess.Popen(  # pylint: disable=consider-using-with
                     [startup_script],
-                    shell=True,
+                    shell=False,
                     stdin=None,
                     stdout=None,
                     stderr=None,
                     close_fds=True,
-                ) as pid:
-                    log.info("Startup script started with pid: %s", pid)
+                )
+                log.info("Startup script started with pid: %s", pid)
                 # Please ensure this is the last line !!!!
     else:
         log.info("--no-startup-script argument defined, so don't execute the startup script")

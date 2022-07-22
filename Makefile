@@ -38,7 +38,7 @@ default: prepare-install
 prepare-install: generate-desktop generate-paths generate-mo compile-glib-schemas-dev
 
 reset:
-	dconf reset -f /apps/guake/
+	dconf reset -f /org/guake/
 
 
 all: clean dev style checks dists test docs
@@ -81,6 +81,8 @@ install-guake:
 	@echo "#############################################################"
 	@if [ "$(DESTDIR)" = "" ]; then $(PYTHON_INTERPRETER) -m pip install -r requirements.txt; fi
 
+	@if [ `python -c "import sys; print(sys.version_info[0])"` -eq 2 ]; then SETUPTOOLS_SCM_PRETEND_VERSION=3.9.0; fi
+
 	@rm -f guake/paths.py.dev
 	@if [ -f guake/paths.py ]; then mv guake/paths.py guake/paths.py.dev; fi
 	@cp -f guake/paths.py.in guake/paths.py
@@ -92,7 +94,7 @@ install-guake:
 	@sed -i -e 's|{{ LOGIN_DESTOP_PATH }}|"$(LOGIN_DESTOP_PATH)"|g' guake/paths.py
 	@sed -i -e 's|{{ AUTOSTART_FOLDER }}|"$(AUTOSTART_FOLDER)"|g' guake/paths.py
 
-	@$(PYTHON_INTERPRETER) setup.py install --root "$(DESTDIR)" --prefix="$(PREFIX)" --optimize=1
+	@$(PYTHON_INTERPRETER) -m pip install . --root "$(DESTDIR)" --prefix="/usr" || echo -e "\033[31;1msetup.py install failed, you may need to run \"sudo git config --global --add safe.directory '*'\"\033[0m"
 
 	@rm -f guake/paths.py
 	@if [ -f guake/paths.py.dev ]; then mv guake/paths.py.dev guake/paths.py; fi

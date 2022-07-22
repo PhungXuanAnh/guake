@@ -257,9 +257,9 @@ class RootTerminalBox(Gtk.Overlay, TerminalHolder):
                     Gtk.main_iteration()
 
             if cur["type"].endswith("v"):
-                box = box.split_v()
+                box = box.split_v_no_save()
             else:
-                box = box.split_h()
+                box = box.split_h_no_save()
             self.restore_box_layout(box.get_child1(), panes)
             self.restore_box_layout(box.get_child2(), panes)
         else:
@@ -412,7 +412,7 @@ class TerminalBox(Gtk.Box, TerminalHolder):
     def add_scroll_bar(self):
         """Packs the scrollbar."""
         adj = self.terminal.get_vadjustment()
-        self.scroll = Gtk.VScrollbar(adj)
+        self.scroll = Gtk.Scrollbar.new(Gtk.Orientation.VERTICAL, adj)
         self.scroll.show()
         self.pack_start(self.scroll, False, False, 0)
 
@@ -462,7 +462,17 @@ class TerminalBox(Gtk.Box, TerminalHolder):
     def split_v(self):
         return self.split(DualTerminalBox.ORIENT_H)
 
+    def split_h_no_save(self):
+        return self.split_no_save(DualTerminalBox.ORIENT_V)
+
+    def split_v_no_save(self):
+        return self.split_no_save(DualTerminalBox.ORIENT_H)
+
+    @save_tabs_when_changed
     def split(self, orientation):
+        self.split_no_save(orientation)
+
+    def split_no_save(self, orientation):
         notebook = self.get_notebook()
         parent = self.get_parent()  # RootTerminalBox
 
@@ -481,6 +491,10 @@ class TerminalBox(Gtk.Box, TerminalHolder):
         dual_terminal_box.set_child_second(terminal_box)
         terminal_box.show()
         dual_terminal_box.show()
+        if self.terminal is not None:
+            # preserve font and font_scale in the new terminal
+            terminal.set_font(self.terminal.font)
+            terminal.font_scale = self.terminal.font_scale
         notebook.terminal_attached(terminal)
 
         return dual_terminal_box
@@ -613,6 +627,7 @@ class DualTerminalBox(Gtk.Paned, TerminalHolder):
         else:
             box.get_terminal().grab_focus()
 
+    @save_tabs_when_changed
     def remove_dead_child(self, child):
         if self.get_child1() is child:
             living_child = self.get_child2()
@@ -632,8 +647,8 @@ class TabLabelEventBox(Gtk.EventBox):
     def __init__(self, notebook, text, settings):
         super().__init__()
         self.notebook = notebook
-        self.box = Gtk.Box(Gtk.Orientation.HORIZONTAL, 0, visible=True)
-        self.label = Gtk.Label(text, visible=True)
+        self.box = Gtk.Box(homogeneous=Gtk.Orientation.HORIZONTAL, spacing=0, visible=True)
+        self.label = Gtk.Label(label=text, visible=True)
         self.close_button = Gtk.Button(
             image=Gtk.Image.new_from_icon_name("window-close", Gtk.IconSize.MENU),
             relief=Gtk.ReliefStyle.NONE,

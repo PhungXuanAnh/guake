@@ -8,7 +8,7 @@ python_version = "3"
 
 [dev-packages]
 "autopep8" = "*"
-"flake8" = "*"
+"flake8" = ">=3.8.0,<4.0.0"
 "pep8" = "*"
 pylint = "*"
 typed-ast = "*"
@@ -34,9 +34,9 @@ pew = "*"
 black = "==21.8b0"
 flakehell = "*"
 toml = "*"
-dataclasses = "*"
 
 [packages]
 pbr = "*"
 wheel = "*"
 typing = {markers = "python_version > '3.5'"}
+pyyaml = "*"

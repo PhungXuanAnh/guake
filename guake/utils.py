@@ -21,9 +21,10 @@ Boston, MA 02110-1301 USA
 """
 import enum
 import logging
+import os
 import subprocess
 import time
-import os
+import yaml
 
 import cairo
 
@@ -39,7 +40,6 @@ from guake.globals import ALIGN_CENTER
 from guake.globals import ALIGN_LEFT
 from guake.globals import ALIGN_RIGHT
 from guake.globals import ALIGN_TOP
-from guake.globals import ALWAYS_ON_PRIMARY
 
 try:
     from gi.repository import GdkX11
@@ -71,9 +71,6 @@ def save_tabs_when_changed(func):
     """Decorator for save-tabs-when-changed"""
 
     def wrapper(*args, **kwargs):
-        func(*args, **kwargs)
-        log.debug("mom, I've been called: %s %s", func.__name__, func)
-
         # Find me the Guake!
         clsname = args[0].__class__.__name__
         g = None
@@ -88,6 +85,9 @@ def save_tabs_when_changed(func):
         elif getattr(args[0], "notebook", None):
             g = args[0].notebook.guake
 
+        func(*args, **kwargs)
+        log.debug("mom, I've been called: %s %s", func.__name__, func)
+
         # Tada!
         if g and g.settings.general.get_boolean("save-tabs-when-changed"):
             g.save_tabs()
@@ -97,7 +97,7 @@ def save_tabs_when_changed(func):
 
 def save_preferences(filename):
     # XXX: Hardcode?
-    prefs = subprocess.check_output(["dconf", "dump", "/apps/guake/"])
+    prefs = subprocess.check_output(["dconf", "dump", "/org/guake/"])
     with open(filename, "wb") as f:
         f.write(prefs)
 
@@ -106,8 +106,48 @@ def restore_preferences(filename):
     # XXX: Hardcode?
     with open(filename, "rb") as f:
         prefs = f.read()
-    with subprocess.Popen(["dconf", "load", "/apps/guake/"], stdin=subprocess.PIPE) as p:
+    with subprocess.Popen(["dconf", "load", "/org/guake/"], stdin=subprocess.PIPE) as p:
         p.communicate(input=prefs)
+
+
+class FileManager:
+    def __init__(self, delta=1.0):
+        self._cache = {}
+        self._delta = max(0.0, delta)
+
+    def clear(self):
+        self._cache.clear()
+
+    def read_yaml(self, filename: str):
+
+        content = None
+
+        try:
+            content = self.read(filename)
+        except PermissionError:
+            log.debug("PermissionError while reading %s.", filename)
+        except FileNotFoundError:
+            log.debug("File %s does not exists.", filename)
+        except UnicodeDecodeError:
+            log.debug("Encoding error %s (we assume is utf-8).", filename)
+
+        if content is not None:
+            try:
+                content = yaml.safe_load(content)
+            except yaml.YAMLError:
+                log.debug("YAMLError reading %s.", filename)
+                content = None
+        return content
+
+    def read(self, filename: str) -> str:
+        # Return the content of a file from the fs or from cache.
+        if (
+            filename not in self._cache
+            or self._cache[filename]["time"] + self._delta < time.monotonic()
+        ):
+            with open(filename, mode="r", encoding="utf-8") as fd:
+                self._cache[filename] = {"time": time.monotonic(), "content": fd.read()}
+        return self._cache[filename]["content"]
 
 
 class TabNameUtils:
@@ -230,9 +270,8 @@ class RectCalculator:
         log.debug("  vdisplacement = %s", vdisplacement)
 
         # get the rectangle just from the destination monitor
-        screen = window.get_screen()
         monitor = cls.get_final_window_monitor(settings, window)
-        window_rect = screen.get_monitor_geometry(monitor)
+        window_rect = monitor.get_workarea()
         log.debug("Current monitor geometry")
         log.debug("  window_rect.x: %s", window_rect.x)
         log.debug("  window_rect.y: %s", window_rect.y)
@@ -285,34 +324,29 @@ class RectCalculator:
 
     @classmethod
     def get_final_window_monitor(cls, settings, window):
-        """Gets the final screen number for the main window of guake."""
+        """Gets the final monitor for the main window of guake."""
 
-        screen = window.get_screen()
+        display = window.get_display()
 
         # fetch settings
         use_mouse = settings.general.get_boolean("mouse-display")
-        dest_screen = settings.general.get_int("display-n")
+        num_monitor = settings.general.get_int("display-n")
 
         if use_mouse:
+            pointer = display.get_default_seat().get_pointer()
+            if pointer is None:
+                monitor = display.get_primary_monitor()
+            else:
+                _, x, y = pointer.get_position()
+                monitor = display.get_monitor_at_point(x, y)
+        else:
+            monitor = display.get_monitor(num_monitor)
+            if monitor is None:
+                # monitor not found or num_monitor is wrong
+                # by default we use the primary monitor
+                monitor = display.get_primary_monitor()
 
-            # TODO PORT get_pointer is deprecated
-            # https://developer.gnome.org/gtk3/stable/GtkWidget.html#gtk-widget-get-pointer
-            win, x, y, _ = screen.get_root_window().get_pointer()
-            dest_screen = screen.get_monitor_at_point(x, y)
-
-        # If Guake is configured to use a screen that is not currently attached,
-        # default to 'primary display' option.
-        n_screens = screen.get_n_monitors()
-        if dest_screen > n_screens - 1:
-            settings.general.set_boolean("mouse-display", False)
-            settings.general.set_int("display-n", dest_screen)
-            dest_screen = screen.get_primary_monitor()
-
-        # Use primary display if configured
-        if dest_screen == ALWAYS_ON_PRIMARY:
-            dest_screen = screen.get_primary_monitor()
-
-        return dest_screen
+        return monitor
 
 
 class ImageLayoutMode(enum.IntEnum):
@@ -421,7 +455,9 @@ class BackgroundImageManager:
         # Step 1. Get target surface
         #         (paint background image into widget size surface by layout mode)
         surface = self.render_target(
-            widget.get_allocated_width(), widget.get_allocated_height(), self.layout_mode
+            widget.get_allocated_width(),
+            widget.get_allocated_height(),
+            self.layout_mode,
         )
 
         cr.save()
@@ -440,7 +476,9 @@ class BackgroundImageManager:
         #
         child = widget.get_child()
         child_surface = cr.get_target().create_similar(
-            cairo.CONTENT_COLOR_ALPHA, child.get_allocated_width(), child.get_allocated_height()
+            cairo.CONTENT_COLOR_ALPHA,
+            child.get_allocated_width(),
+            child.get_allocated_height(),
         )
         child_cr = cairo.Context(child_surface)
 

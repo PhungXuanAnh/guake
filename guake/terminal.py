@@ -109,8 +109,6 @@ class GuakeTerminal(Vte.Terminal):
         self.matched_value = ""
         self.font_scale_index = 0
         self._pid = None
-        # self.custom_bgcolor = None
-        # self.custom_fgcolor = None
         self.found_link = None
         self.uuid = uuid.uuid4()
 
@@ -230,13 +228,13 @@ class GuakeTerminal(Vte.Terminal):
                 tag = self.match_add_regex(
                     Vte.Regex.new_for_match(expr, len(expr), VTE_REGEX_FLAGS), 0
                 )
-                self.match_set_cursor_type(tag, Gdk.CursorType.HAND2)
+                self.match_set_cursor_name(tag, "hand")
 
             for _useless, match, _otheruseless in QUICK_OPEN_MATCHERS:
                 tag = self.match_add_regex(
                     Vte.Regex.new_for_match(match, len(match), VTE_REGEX_FLAGS), 0
                 )
-                self.match_set_cursor_type(tag, Gdk.CursorType.HAND2)
+                self.match_set_cursor_name(tag, "hand")
         except (
             GLib.Error,
             AttributeError,
@@ -329,8 +327,6 @@ class GuakeTerminal(Vte.Terminal):
                     py_func = m.group(2).strip()
 
         def find_lineno(text, pt, lineno, py_func):
-            # print("text={!r}, pt={!r}, lineno={!r}, py_func={!r}".format(text,
-            #                                                              pt, lineno, py_func))
             if lineno:
                 return lineno
             if not py_func:
@@ -496,21 +492,29 @@ class GuakeTerminal(Vte.Terminal):
         if value:
             return value
 
+    def get_link_under_terminal_cursor(self):
+        cursor_position = self.get_cursor_position()
+        matched_string = self.match_check(cursor_position.column, cursor_position.row)
+        link = self.handleTerminalMatch(matched_string)
+        if link:
+            return link
+
     def get_link_under_cursor(self):
         return self.found_link
 
-    def browse_link_under_cursor(self):
+    def browse_link_under_cursor(self, url=None):
         # TODO move the call to xdg-open to guake.utils
-        if not self.found_link:
+        if not self.found_link and url is None:
             return
-        log.debug("Opening link: %s", self.found_link)
-        cmd = ["xdg-open", self.found_link]
+        url = url if url is not None else self.found_link
+        log.debug("Opening link: %s", url)
+        cmd = ["xdg-open", url]
         with subprocess.Popen(cmd, shell=False):
             pass
 
     def set_font(self, font):
         self.font = font
-        self.set_font_scale_index(0)
+        self.set_font_scale_index(self.font_scale)
 
     def set_font_scale_index(self, scale_index):
         self.font_scale_index = clamp(scale_index, -6, 12)
@@ -537,7 +541,6 @@ class GuakeTerminal(Vte.Terminal):
     def kill(self):
         pid = self.pid
         threading.Thread(target=self.delete_shell, args=(pid,)).start()
-        # start_new_thread(self.delete_shell, (pid,))
 
     def delete_shell(self, pid):
         """Kill the shell with SIGHUP

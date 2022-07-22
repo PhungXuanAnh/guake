@@ -39,7 +39,6 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("Keybinder", "3.0")
 from gi.repository import GLib
-from gi.repository import GObject
 from gi.repository import Gdk
 from gi.repository import Gio
 from gi.repository import Gtk
@@ -70,6 +69,7 @@ from guake.simplegladeapp import SimpleGladeApp
 from guake.theme import patch_gtk_theme
 from guake.theme import select_gtk_theme
 from guake.utils import BackgroundImageManager
+from guake.utils import FileManager
 from guake.utils import FullscreenManager
 from guake.utils import HidePrevention
 from guake.utils import RectCalculator
@@ -86,10 +86,8 @@ RESPONSE_BACKWARD = 1
 # Disable find feature until python-vte hasn't been updated
 enable_find = False
 
-GObject.threads_init()
-
 # Setting gobject program name
-GObject.set_prgname(NAME)
+GLib.set_prgname(NAME)
 
 GDK_WINDOW_STATE_WITHDRAWN = 1
 GDK_WINDOW_STATE_ICONIFIED = 2
@@ -173,6 +171,8 @@ class Guake(SimpleGladeApp):
             menu.prepend(show)
             self.tray_icon.set_menu(menu)
 
+        self.display_tab_names = 0
+
         # important widgets
         self.window = self.get_widget("window-root")
         self.window.set_name("guake-terminal")
@@ -190,6 +190,9 @@ class Guake(SimpleGladeApp):
 
         # FullscreenManager
         self.fullscreen_manager = FullscreenManager(self.settings, self.window, self)
+
+        # Start the file manager (only used by guake.yml so far).
+        self.fm = FileManager()
 
         # Workspace tracking
         self.notebook_manager = NotebookManager(
@@ -221,8 +224,6 @@ class Guake(SimpleGladeApp):
 
         # store the default window title to reset it when update is not wanted
         self.default_window_title = self.window.get_title()
-
-        self.display_tab_names = 0
 
         self.window.connect("focus-out-event", self.on_window_losefocus)
         self.window.connect("focus-in-event", self.on_window_takefocus)
@@ -308,7 +309,7 @@ class Guake(SimpleGladeApp):
                 self.hide()
                 self.show()
         else:
-            log.warn("System doesn't support transparency")
+            log.warning("System doesn't support transparency")
             self.window.transparency = False
             self.window.set_visual(screen.get_system_visual())
 
@@ -581,7 +582,8 @@ class Guake(SimpleGladeApp):
         if not self.window.get_property("visible"):
             log.debug("Showing the terminal")
             self.show()
-            self.window.get_window().focus(0)
+            server_time = get_server_time(self.window)
+            self.window.get_window().focus(server_time)
             self.set_terminal_focus()
             return
 
@@ -589,7 +591,8 @@ class Guake(SimpleGladeApp):
         has_focus = self.window.get_window().get_state() & Gdk.WindowState.FOCUSED
         if should_refocus and not has_focus:
             log.debug("Refocussing the terminal")
-            self.window.get_window().focus(0)
+            server_time = get_server_time(self.window)
+            self.window.get_window().focus(server_time)
             self.set_terminal_focus()
         else:
             log.debug("Hiding the terminal")
@@ -689,11 +692,6 @@ class Guake(SimpleGladeApp):
             self.add_tab()
 
         self.window.set_keep_below(False)
-        if not self.fullscreen_manager.is_fullscreen():
-            self.window.show_all()
-        # this is needed because self.window.show_all() results in showing every
-        # thing which includes the scrollbar too
-        self.settings.general.triggerOnChangedValue(self.settings.general, "use-scrollbar")
 
         # move the window even when in fullscreen-mode
         log.debug("Moving window to: %r", window_rect)
@@ -1102,8 +1100,32 @@ class Guake(SimpleGladeApp):
             page_num = self.get_notebook().page_num(terminal.get_parent())
             self.get_notebook().rename_page(page_num, self.compute_tab_title(terminal), False)
 
+    def load_cwd_guake_yaml(self, vte) -> dict:
+        # Read the content of .guake.yml in cwd
+        if not self.settings.general.get_boolean("load-guake-yml"):
+            return {}
+
+        cwd = Path(vte.get_current_directory())
+        filename = str(cwd.joinpath(".guake.yml"))
+
+        try:
+            content = self.fm.read_yaml(filename)
+        except Exception:
+            log.debug("Unexpected error reading %s.", filename, exc_info=True)
+            content = {}
+
+        if not isinstance(content, dict):
+            content = {}
+        return content
+
     def compute_tab_title(self, vte):
         """Compute the tab title"""
+
+        guake_yml = self.load_cwd_guake_yaml(vte)
+
+        if "title" in guake_yml:
+            return guake_yml["title"]
+
         vte_title = vte.get_window_title() or _("Terminal")
         try:
             current_directory = vte.get_current_directory()
@@ -1117,6 +1139,7 @@ class Guake(SimpleGladeApp):
                     vte_title = "(root)"
         except OSError:
             pass
+
         return TabNameUtils.shorten(vte_title, self.settings)
 
     def check_if_terminal_directory_changed(self, term):
@@ -1151,6 +1174,7 @@ class Guake(SimpleGladeApp):
             page_num = nb.page_num(box)
             if page_num != -1:
                 break
+
         # if tab has been renamed by user, don't override.
         if not getattr(box, "custom_label_set", False):
             title = self.compute_tab_title(vte)
@@ -1185,6 +1209,13 @@ class Guake(SimpleGladeApp):
             if t.get_uuid() == term_uuid
         )
         self.get_notebook().rename_page(page_index, new_text, user_set)
+
+    def get_index_from_uuid(self, term_uuid):
+        term_uuid = uuid.UUID(term_uuid)
+        for index, t in enumerate(self.get_notebook().iter_terminals()):
+            if t.get_uuid() == term_uuid:
+                return index
+        return -1
 
     def rename_current_tab(self, new_text, user_set=False):
         page_num = self.get_notebook().get_current_page()
@@ -1279,6 +1310,13 @@ class Guake(SimpleGladeApp):
         terminals = self.get_notebook().get_terminals_for_page(page_num)
         return str(terminals[0].get_uuid())
 
+    def open_link_under_terminal_cursor(self, *args):
+        current_term = self.get_notebook().get_current_terminal()
+        if current_term is None:
+            return
+        url = current_term.get_link_under_terminal_cursor()
+        current_term.browse_link_under_cursor(url)
+
     def search_on_web(self, *args):
         """Search for the selected text on the web"""
         # TODO KEYBINDINGS ONLY
@@ -1290,8 +1328,7 @@ class Guake(SimpleGladeApp):
             search_query = guake_clipboard.wait_for_text()
             search_query = quote_plus(search_query)
             if search_query:
-                # TODO: search provider should be selectable (someone might
-                # prefer bing.com, the internet is a strange place ¯\_(ツ)_/¯ )
+                # TODO: search provider should be selectable.
                 search_url = f"https://www.google.com/search?q={search_query}&safe=off"
                 Gtk.show_uri(self.window.get_screen(), search_url, get_server_time(self.window))
         return True
