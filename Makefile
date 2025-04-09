@@ -486,4 +486,5 @@ git-amend-push:
 
 xuananh-install-from-repo:
 	make
-    sudo make install
+	sudo make install
+
