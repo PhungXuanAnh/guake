@@ -7,6 +7,7 @@
   - [3.2. using GTK Inspector for debug css](#32-using-gtk-inspector-for-debug-css)
   - [3.3. references](#33-references)
 - [4. install](#4-install)
+- [9. Execute startup commands on session restore](#9-execute-startup-commands-on-session-restore)
 
 # 1. run on local
 
@@ -107,3 +108,59 @@ https://guake.readthedocs.io/en/latest/contributing/dev_env.html#install-on-syst
 or reinstall
 
 `make reinstall`
+
+# 9. Execute startup commands on session restore
+
+refer to commit: `Add support for executing startup commands in ~/.config/guake/session.json` for more detail
+
+Guake remembers the command it launched in a pane and re-runs it when the
+session is restored, so panes that run long-lived processes (dashboards, log
+tails, dev servers, `htop`, `watch ...`) come back running the same command
+instead of an empty shell.
+
+A pane's startup command is recorded whenever Guake itself launches a command in
+it — via `guake -e "..."`, the D-Bus `execute_command` method, or a
+split-with-command. Commands you type by hand into the shell are not captured,
+because Guake has no way to know which one "defines" the pane. The most recent
+command Guake ran in a pane is the one that is saved and replayed.
+
+Restoring only works when tab-session saving is enabled
+(Preferences → General → "Automatically save tabs session when changed", the
+`save-tabs-when-changed` setting), so `session.json` is kept up to date.
+
+## 9.1. Example
+
+```shell
+# Run htop in the current pane; it is restored on the next launch
+guake -e "htop"
+
+# Or via D-Bus
+dbus-send --session --print-reply --type=method_call \
+  --dest=org.guake3.RemoteControl /org/guake3/RemoteControl \
+  org.guake3.RemoteControl.execute_command string:'htop'
+```
+
+## 9.2. How it is stored
+
+Each terminal pane in `~/.config/guake/session.json` gains a `command` field:
+
+```json
+{
+  "type": "term",
+  "directory": "/home/user",
+  "command": "htop"
+}
+```
+
+`"command": null` means the pane had no Guake-launched command and restores as a
+plain shell.
+
+## 9.3. Implementation notes
+
+- `guake/terminal.py`: `GuakeTerminal.startup_command` stores the command;
+  defaults to `None`.
+- `guake/guake_app.py`: `execute_command` and `execute_command_by_uuid` record
+  the command onto the target terminal when Guake runs it.
+- `guake/boxes.py`: `save_box_layout` writes the `command` field to
+  `session.json`; `restore_box_layout` re-runs it (after a short delay so the
+  shell is ready) once the pane has been recreated.

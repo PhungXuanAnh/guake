@@ -478,6 +478,9 @@ class Guake(SimpleGladeApp):
             command += "\n"
 
         terminal = self.get_notebook().get_current_terminal()
+        # Remember the command so it is saved to session.json and re-run when the
+        # session is restored (see GuakeTerminal.startup_command).
+        terminal.startup_command = command.rstrip("\r\n")
         terminal.feed_child(command)
 
     def execute_command_by_uuid(self, tab_uuid, command):
@@ -496,6 +499,9 @@ class Guake(SimpleGladeApp):
         else:
             terminals = self.get_notebook().get_terminals_for_page(page_index)
             for current_vte in terminals:
+                # Remember the command for session save/restore (see
+                # GuakeTerminal.startup_command).
+                current_vte.startup_command = command.rstrip("\r\n")
                 current_vte.feed_child(command)
 
     def on_window_losefocus(self, window, event):

@@ -110,6 +110,11 @@ class GuakeTerminal(Vte.Terminal):
         self.connect("selection-changed", self.copy_on_select)
         self.matched_value = ""
         self.font_scale_index = 0
+        # Command that "defines" this pane, if guake launched one here (e.g. via
+        # `execute_command` or a split-with-command). Persisted to session.json
+        # and re-run on restore so long-running panes come back. None means the
+        # pane was just a plain shell with no guake-launched command.
+        self.startup_command = None
         self._pid = None
         self.found_link = None
         self.uuid = uuid.uuid4()

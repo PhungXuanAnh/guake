@@ -215,6 +215,7 @@ class RootTerminalBox(Gtk.Overlay, TerminalHolder):
                 {
                     "type": btype,
                     "directory": directory,
+                    "command": getattr(box.terminal, "startup_command", None),
                     "custom_colors": box.terminal.get_custom_colors_dict(),
                 }
             )
@@ -275,6 +276,15 @@ class RootTerminalBox(Gtk.Overlay, TerminalHolder):
             term.set_custom_colors_from_dict(cur.get("custom_colors", None))
             box.set_terminal(term)
             self.get_notebook().terminal_attached(term)
+
+            # Execute startup command if specified in session
+            if cur.get("command"):
+                # Store command for future session saves
+                term.startup_command = cur["command"]
+                # Use GLib.timeout_add to ensure shell is ready before executing command
+                GLib.timeout_add(
+                    100, lambda cmd=cur["command"], t=term: t.execute_command(cmd) or False
+                )
 
     def set_last_terminal_focused(self, terminal):
         self.last_terminal_focused = terminal
