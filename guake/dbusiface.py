@@ -158,6 +158,10 @@ class DbusManager(dbus.service.Object):
         self.guake.add_tab()
         self.guake.execute_command(command)
 
+    @dbus.service.method(DBUS_NAME, in_signature="s")
+    def execute_command_current(self, command):
+        self.guake.execute_command(command)
+
     @dbus.service.method(DBUS_NAME, in_signature="i", out_signature="s")
     def get_tab_name(self, tab_index=0):
         return self.guake.get_notebook().get_tab_text_index(tab_index)

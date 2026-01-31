@@ -275,6 +275,15 @@ def main():
     )
 
     parser.add_argument(
+        "-E",
+        "--execute-current",
+        dest="command_current",
+        action="store",
+        default="",
+        help=_("Execute an arbitrary command in the current terminal."),
+    )
+
+    parser.add_argument(
         "-i",
         "--tab-index",
         dest="tab_index",
@@ -596,6 +605,10 @@ def main():
 
     if options.command and not (options.split_vertical or options.split_horizontal):
         remote_object.execute_command(options.command)
+        only_show_hide = options.show
+
+    if options.command_current:
+        remote_object.execute_command_current(options.command_current)
         only_show_hide = options.show
 
     if options.tab_index and options.rename_tab:
