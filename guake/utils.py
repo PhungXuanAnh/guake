@@ -35,6 +35,7 @@ gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 
 from gi.repository import Gdk
+from gi.repository import GLib
 from gi.repository import Gtk
 from guake.globals import ALIGN_BOTTOM
 from guake.globals import ALIGN_CENTER
@@ -317,7 +318,14 @@ class RectCalculator:
             log.debug("  window_rect.height: %s", window_rect.height)
             log.debug("  window_rect.width: %s", window_rect.width)
             # Note: move_resize is only on GTK3
+            # First resize the window, then queue a resize to ensure GTK processes it
             window.resize(window_rect.width, window_rect.height)
+            # Process pending GTK events to ensure resize is applied before move
+            # This fixes the issue where window position gets constrained by old dimensions
+            # when switching between monitors with different resolutions
+            while Gtk.events_pending():
+                Gtk.main_iteration_do(False)
+            # Now move the window to the correct position
             window.move(window_rect.x, window_rect.y)
             log.debug("Updated window position: %r", window.get_position())
 

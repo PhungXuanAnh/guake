@@ -7,6 +7,7 @@
   - [3.2. using GTK Inspector for debug css](#32-using-gtk-inspector-for-debug-css)
   - [3.3. references](#33-references)
 - [4. install](#4-install)
+- [8. Fix window resizing and positioning when switching monitors](#8-fix-window-resizing-and-positioning-when-switching-monitors)
 - [9. Execute startup commands on session restore](#9-execute-startup-commands-on-session-restore)
 
 # 1. run on local
@@ -108,6 +109,23 @@ https://guake.readthedocs.io/en/latest/contributing/dev_env.html#install-on-syst
 or reinstall
 
 `make reinstall`
+
+# 8. Fix window resizing and positioning when switching monitors
+
+This commit makes Guake recompute its final window rectangle from the target
+monitor workarea every time it is shown or resized by preferences. The final
+rectangle uses the configured width, height, alignment, and displacement values.
+
+For non-fullscreen windows, Guake unmaximizes, resizes to the configured
+rectangle, lets GTK process the resize, then moves the window. This avoids
+position drift and off-screen placement when moving between monitors with
+different resolutions.
+
+The commit also keeps the configured rectangle stable during normal usage:
+after a hidden window is shown, Guake reapplies the configured rectangle once
+the window manager has finished restoring state, and terminal-specific config
+reloads skip global window geometry so opening a new tab does not unexpectedly
+resize the Guake window.
 
 # 9. Execute startup commands on session restore
 

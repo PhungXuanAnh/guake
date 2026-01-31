@@ -6,6 +6,7 @@ import os
 import time
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -241,3 +242,66 @@ def test_guake_compute_tab_title(mocker, g, fs):
     # Avoid loading the guake.yml
     mocker.patch.object(g.settings.general, "get_boolean", return_value=False)
     assert g.compute_tab_title(vte) == "Terminal"
+
+
+class TriggerRecorder:
+    def __init__(self):
+        self.calls = []
+
+    def triggerOnChangedValue(self, settings, key, user_data=None):
+        self.calls.append((key, user_data))
+
+
+def test_finish_show_size_reset_reapplies_configured_window_rect(mocker):
+    """Show settling should clear stale maximized state and reset tracked size."""
+    app = object.__new__(Guake)
+    app.settings = SimpleNamespace()
+    app.window = SimpleNamespace(
+        get_allocation=lambda: SimpleNamespace(width=1804, height=928),
+        get_state=lambda: 0,
+    )
+    app.fullscreen_manager = SimpleNamespace(is_fullscreen=lambda: False)
+    app._pending_size_reset = True
+    app._last_window_width = 1920
+    app._last_window_height = 1080
+    set_rect = mocker.patch("guake.guake_app.RectCalculator.set_final_window_rect")
+
+    assert app._finish_show_size_reset() is False
+
+    set_rect.assert_called_once_with(app.settings, app.window)
+    assert app._last_window_width == 1804
+    assert app._last_window_height == 928
+    assert app._pending_size_reset is False
+
+
+def _make_load_config_app(fullscreen=False):
+    app = object.__new__(Guake)
+    app.settings = SimpleNamespace(
+        general=TriggerRecorder(),
+        style=TriggerRecorder(),
+        styleFont=TriggerRecorder(),
+        styleBackground=TriggerRecorder(),
+    )
+    app.fullscreen_manager = SimpleNamespace(is_fullscreen=lambda: fullscreen)
+    return app
+
+
+def test_load_config_global_reloads_window_geometry():
+    app = _make_load_config_app()
+
+    app.load_config()
+
+    general_keys = [key for key, _ in app.settings.general.calls]
+    assert "window-height" in general_keys
+    assert "window-width" in general_keys
+
+
+def test_load_config_for_terminal_skips_global_window_geometry():
+    app = _make_load_config_app()
+
+    app.load_config(terminal_uuid="term-1")
+
+    general_keys = [key for key, _ in app.settings.general.calls]
+    assert "window-height" not in general_keys
+    assert "window-width" not in general_keys
+    assert ("use-scrollbar", {"terminal_uuid": "term-1"}) in app.settings.general.calls

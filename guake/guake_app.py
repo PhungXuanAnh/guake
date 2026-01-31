@@ -757,6 +757,28 @@ class Guake(SimpleGladeApp):
         self.restore_pending_terminal_split()
         self.execute_hook("show")
 
+        if not self.fullscreen_manager.is_fullscreen():
+            GLib.timeout_add(100, self._finish_show_size_reset)
+
+    def _finish_show_size_reset(self):
+        if not self.fullscreen_manager.is_fullscreen():
+            log.debug(
+                "[SHOW] reapplying configured window rect after presentation; state=%s",
+                int(self.window.get_state()),
+            )
+            RectCalculator.set_final_window_rect(self.settings, self.window)
+
+        alloc = self.window.get_allocation()
+        self._last_window_width = alloc.width
+        self._last_window_height = alloc.height
+        if hasattr(self, "_pending_size_reset"):
+            self._pending_size_reset = False
+        log.debug(
+            "Window size tracking reset after show: (%d, %d)",
+            alloc.width, alloc.height,
+        )
+        return False
+
     def hide_from_remote(self):
         """
         Hides the main window of the terminal and sets the visible
@@ -828,7 +850,12 @@ class Guake(SimpleGladeApp):
         self.settings.general.triggerOnChangedValue(
             self.settings.general, "window-ontop", user_data=user_data
         )
-        if not self.fullscreen_manager.is_fullscreen():
+        if terminal_uuid:
+            log.debug(
+                "Skipping global window geometry reload for terminal-specific config: %s",
+                terminal_uuid,
+            )
+        elif not self.fullscreen_manager.is_fullscreen():
             self.settings.general.triggerOnChangedValue(
                 self.settings.general, "window-height", user_data=user_data
             )
