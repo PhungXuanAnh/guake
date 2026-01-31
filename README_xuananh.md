@@ -14,7 +14,7 @@
 
 ```shell
 pyenv local 3.9.0
-venv-create
+venv_create
 
 make local-setup-development-environment
 # ./scripts/bootstrap-dev-debian.sh
