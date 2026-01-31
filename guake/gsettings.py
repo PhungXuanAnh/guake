@@ -199,18 +199,17 @@ class GSettingHandler:
         )
         terminals = (terminal,) if terminal else self.guake.notebook_manager.iter_terminals()
         for term in terminals:
-            # There is an hbox in each tab of the main notebook and it
-            # contains a Terminal and a Scrollbar. Since only have the
-            # Terminal here, we're going to use this to get the
-            # scrollbar and hide/show it.
-            hbox = term.get_parent()
-            if hbox is None:
+            # The terminal is inside terminal_hbox which is inside TerminalBox.
+            # We need to get the TerminalBox to access the scroll widget.
+            terminal_box = term.get_terminal_box()
+            if terminal_box is None:
                 continue
-            terminal, scrollbar = hbox.get_children()
-            if settings.get_boolean(key):
-                scrollbar.show()
-            else:
-                scrollbar.hide()
+            if hasattr(terminal_box, 'scroll'):
+                scrollbar = terminal_box.scroll
+                if settings.get_boolean(key):
+                    scrollbar.show()
+                else:
+                    scrollbar.hide()
 
     def history_size_changed(self, settings, key, user_data):
         """If the gconf var history_size be changed, this method will

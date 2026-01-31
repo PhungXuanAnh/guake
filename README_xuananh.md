@@ -7,6 +7,11 @@
   - [3.2. using GTK Inspector for debug css](#32-using-gtk-inspector-for-debug-css)
   - [3.3. references](#33-references)
 - [4. install](#4-install)
+- [5. How to rename panes](#5-how-to-rename-panes)
+  - [5.1. Via GUI](#51-via-gui)
+  - [5.2. Via CLI](#52-via-cli)
+  - [5.3. Example: Script with named panes](#53-example-script-with-named-panes)
+  - [5.4. Pane label font size](#54-pane-label-font-size)
 - [8. Fix window resizing and positioning when switching monitors](#8-fix-window-resizing-and-positioning-when-switching-monitors)
 - [9. Execute startup commands on session restore](#9-execute-startup-commands-on-session-restore)
 
@@ -109,6 +114,42 @@ https://guake.readthedocs.io/en/latest/contributing/dev_env.html#install-on-syst
 or reinstall
 
 `make reinstall`
+
+# 5. How to rename panes
+
+Panes (split terminals) can be renamed via GUI or CLI.
+
+## 5.1. Via GUI
+
+- Right-click on a pane → "Rename pane"
+- Or use keyboard shortcut (configure in Preferences → Keyboard shortcuts)
+
+## 5.2. Via CLI
+
+```shell
+# Rename pane at index 0 to "web"
+guake -S 0 --rename-pane "web"
+
+# Combine with execute command
+guake -S 0 -E "cd ~/work && dlog container" --rename-pane "web"
+
+# Reset pane name to default (empty)
+guake -S 0 --rename-pane "-"
+```
+
+## 5.3. Example: Script with named panes
+
+```shell
+guake -S 0 -E "cd ~/work/viralize-web && dlog vvm2-web-1" --rename-pane "web"
+guake -S 1 -E "cd ~/work/viralize && dlog vvm2-adserver-1" --rename-pane "viralize"
+guake -S 2 -E "cd ~/work/viralize-web/components && dlog vvm2-web-components-1" --rename-pane "component"
+```
+
+## 5.4. Pane label font size
+
+Configure in Preferences → Appearance → "Pane label font size" (range: 8-24)
+
+Restart guake
 
 # 8. Fix window resizing and positioning when switching monitors
 

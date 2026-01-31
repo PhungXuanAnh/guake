@@ -16,6 +16,13 @@
     <property name="step-increment">0.05</property>
     <property name="page-increment">10</property>
   </object>
+  <object class="GtkAdjustment" id="pane_label_font_size_adjustment">
+    <property name="lower">8</property>
+    <property name="upper">24</property>
+    <property name="value">11</property>
+    <property name="step-increment">1</property>
+    <property name="page-increment">2</property>
+  </object>
   <object class="GtkImage" id="image1">
     <property name="visible">True</property>
     <property name="can-focus">False</property>
@@ -2215,7 +2222,32 @@
                                       </packing>
                                     </child>
                                     <child>
-                                      <placeholder/>
+                                      <object class="GtkLabel" id="label_pane_font_size">
+                                        <property name="visible">True</property>
+                                        <property name="can-focus">False</property>
+                                        <property name="halign">start</property>
+                                        <property name="margin-right">12</property>
+                                        <property name="label" translatable="yes">Pane label font size:</property>
+                                        <property name="use-markup">True</property>
+                                        <property name="xalign">0</property>
+                                      </object>
+                                      <packing>
+                                        <property name="left-attach">0</property>
+                                        <property name="top-attach">3</property>
+                                      </packing>
+                                    </child>
+                                    <child>
+                                      <object class="GtkSpinButton" id="pane_label_font_size">
+                                        <property name="visible">True</property>
+                                        <property name="can-focus">True</property>
+                                        <property name="adjustment">pane_label_font_size_adjustment</property>
+                                        <property name="numeric">True</property>
+                                        <signal name="value-changed" handler="on_pane_label_font_size_value_changed" swapped="no"/>
+                                      </object>
+                                      <packing>
+                                        <property name="left-attach">1</property>
+                                        <property name="top-attach">3</property>
+                                      </packing>
                                     </child>
                                     <child>
                                       <placeholder/>

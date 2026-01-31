@@ -81,6 +81,10 @@ def patch_gtk_theme(style_context, settings):
 
     selected_fg_color = rgba_to_hex(style_context.lookup_color("theme_selected_fg_color")[1])
     selected_bg_color = rgba_to_hex(style_context.lookup_color("theme_selected_bg_color")[1])
+
+    # Get pane label font size from settings
+    pane_label_font_size = settings.style.get_int("pane-label-font-size")
+
     log.debug(
         "Patching theme '%s' (prefer dark = '%r'), overriding tab 'checked' state': "
         "foreground: %r, background: %r",
@@ -94,6 +98,14 @@ def patch_gtk_theme(style_context, settings):
         .custom_tab:checked {{
             color: {selected_fg_color};
             background: {selected_bg_color};
+        }}
+        .pane-name-label {{
+            background: {selected_bg_color};
+            color: {selected_fg_color};
+            padding: 2px 8px;
+            font-size: {pane_label_font_size}px;
+            font-weight: bold;
+            border-bottom: 1px solid alpha({selected_fg_color}, 0.3);
         }}
         """
     ).encode()

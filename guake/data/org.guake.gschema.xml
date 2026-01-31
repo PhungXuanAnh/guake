@@ -348,6 +348,12 @@
             <summary>Cursor shape of the terminal</summary>
             <description>Controls the shape of the cursor in the terminals. 0: Block, 1: I-Beam, 2: Underline</description>
         </key>
+        <key name="pane-label-font-size" type="i">
+            <default>11</default>
+            <range min="8" max="24"/>
+            <summary>Pane label font size</summary>
+            <description>Font size in pixels for the pane name label displayed above split terminals.</description>
+        </key>
         <child name="font" schema="guake.style.font"/>
         <child name="background" schema="guake.style.background"/>
     </schema>
@@ -627,6 +633,11 @@
             <default>'&lt;Super&gt;x'</default>
             <summary>Close terminal.</summary>
             <description>Close the currently focused terminal.</description>
+        </key>
+        <key name="rename-current-pane" type="s">
+            <default>''</default>
+            <summary>Rename current pane.</summary>
+            <description>Open dialog to rename the current terminal pane.</description>
         </key>
         <key name="focus-terminal-up" type="s">
             <default>'&lt;Super&gt;&lt;Shift&gt;Up'</default>

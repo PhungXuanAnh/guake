@@ -105,7 +105,7 @@ class Keybindings:
                 "split-tab-vertical",
                 lambda *args: self.guake.get_notebook()
                 .get_current_terminal()
-                .get_parent()
+                .get_terminal_box()
                 .split_v()
                 or True,
             ),
@@ -113,7 +113,7 @@ class Keybindings:
                 "split-tab-horizontal",
                 lambda *args: self.guake.get_notebook()
                 .get_current_terminal()
-                .get_parent()
+                .get_terminal_box()
                 .split_h()
                 or True,
             ),
@@ -121,6 +121,7 @@ class Keybindings:
                 "close-terminal",
                 lambda *args: self.guake.get_notebook().get_current_terminal().kill() or True,
             ),
+            ("rename-current-pane", self.guake.accel_rename_current_pane),
             (
                 "focus-terminal-up",
                 (

@@ -88,10 +88,27 @@ class TerminalContextMenuCallbacks:
         self.notebook.guake.accel_quit()
 
     def on_split_vertical(self, *args):
-        self.terminal.get_parent().split_v(50)
+        self.terminal.get_terminal_box().split_v(50)
 
     def on_split_horizontal(self, *args):
-        self.terminal.get_parent().split_h(50)
+        self.terminal.get_terminal_box().split_h(50)
+
+    def on_rename_pane(self, *args):
+        """Open dialog to rename the current pane."""
+        from guake.dialogs import RenamePaneDialog
+        from guake.utils import HidePrevention
+
+        terminal_box = self.terminal.get_terminal_box()
+        current_name = terminal_box.get_pane_name() or ""
+
+        HidePrevention(self.window).prevent()
+        dialog = RenamePaneDialog(self.window, current_name)
+        response = dialog.run()
+        if response == Gtk.ResponseType.ACCEPT:
+            new_name = dialog.get_text().strip()
+            terminal_box.set_pane_name(new_name)
+        dialog.destroy()
+        HidePrevention(self.window).allow()
 
     def on_close_terminal(self, *args):
         self.terminal.kill()

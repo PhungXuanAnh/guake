@@ -141,6 +141,21 @@ class GuakeTerminal(Vte.Terminal):
     def get_uuid(self):
         return self.uuid
 
+    def get_terminal_box(self):
+        """Get the TerminalBox that contains this terminal.
+
+        Since the terminal is inside terminal_hbox which is inside TerminalBox,
+        we need to go up two levels.
+        """
+        from guake.boxes import TerminalBox
+
+        parent = self.get_parent()
+        while parent is not None:
+            if isinstance(parent, TerminalBox):
+                return parent
+            parent = parent.get_parent()
+        return None
+
     @property
     def pid(self):
         return self._pid

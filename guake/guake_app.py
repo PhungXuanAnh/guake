@@ -1106,6 +1106,28 @@ class Guake(SimpleGladeApp):
         self.get_notebook().get_tab_label(page).on_rename(None)
         return True
 
+    def accel_rename_current_pane(self, *args):
+        """Callback to show the rename pane dialog. Called by the accel key."""
+        from guake.dialogs import RenamePaneDialog
+        from guake.utils import HidePrevention
+
+        terminal = self.get_notebook().get_current_terminal()
+        if terminal is None:
+            return True
+
+        terminal_box = terminal.get_terminal_box()
+        current_name = terminal_box.get_pane_name() or ""
+
+        HidePrevention(self.window).prevent()
+        dialog = RenamePaneDialog(self.window, current_name)
+        response = dialog.run()
+        if response == Gtk.ResponseType.ACCEPT:
+            new_name = dialog.get_text().strip()
+            terminal_box.set_pane_name(new_name)
+        dialog.destroy()
+        HidePrevention(self.window).allow()
+        return True
+
     def accel_copy_clipboard(self, *args):
         # TODO KEYBINDINGS ONLY
         """Callback to copy text in the shown terminal. Called by the
@@ -1159,7 +1181,7 @@ class Guake(SimpleGladeApp):
         # TODO NOTEBOOK this code only works if there is only one terminal in a
         # page, this need to be rewritten
         for terminal in self.get_notebook().iter_terminals():
-            page_num = self.get_notebook().page_num(terminal.get_parent())
+            page_num = self.get_notebook().page_num(terminal.get_terminal_box())
             self.get_notebook().rename_page(page_num, self.compute_tab_title(terminal), False)
 
     def load_cwd_guake_yaml(self, vte) -> dict:
@@ -1223,7 +1245,7 @@ class Guake(SimpleGladeApp):
         # Check if terminal directory has changed
         self.check_if_terminal_directory_changed(term)
 
-        box = term.get_parent().get_root_box()
+        box = term.get_terminal_box().get_root_box()
         use_vte_titles = self.settings.general.get_boolean("use-vte-titles")
         if not use_vte_titles:
             return

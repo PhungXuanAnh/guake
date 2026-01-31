@@ -116,6 +116,7 @@ HOTKEYS = [
             {"key": "split-tab-vertical", "label": _("Split tab vertical")},
             {"key": "split-tab-horizontal", "label": _("Split tab horizontal")},
             {"key": "close-terminal", "label": _("Close terminal")},
+            {"key": "rename-current-pane", "label": _("Rename current pane")},
             {"key": "focus-terminal-up", "label": _("Focus terminal above")},
             {"key": "focus-terminal-down", "label": _("Focus terminal below")},
             {"key": "focus-terminal-left", "label": _("Focus terminal on the left")},
@@ -634,6 +635,9 @@ class PrefsCallbacks:
     def on_blink_cursor_toggled(self, chk):
         self.prefDlg.on_blink_cursor_toggled(chk)
 
+    def on_pane_label_font_size_value_changed(self, spin):
+        self.prefDlg.on_pane_label_font_size_value_changed(spin)
+
     def on_palette_color_set(self, btn):
         self.prefDlg.on_palette_color_set(btn)
 
@@ -898,6 +902,11 @@ class PrefsDialog(SimpleGladeApp):
     def on_blink_cursor_toggled(self, chk):
         """Changes the value of blink_cursor in dconf"""
         self.settings.style.set_int("cursor-blink-mode", chk.get_active())
+
+    def on_pane_label_font_size_value_changed(self, spin):
+        """Changes the value of pane-label-font-size in dconf"""
+        val = int(spin.get_value())
+        self.settings.style.set_int("pane-label-font-size", val)
 
     def on_palette_color_set(self, btn):
         """Changes the value of palette in dconf"""
@@ -1319,6 +1328,10 @@ class PrefsDialog(SimpleGladeApp):
         # cursor blink
         value = self.settings.style.get_int("cursor-blink-mode")
         self.set_cursor_blink_mode(value)
+
+        # pane label font size
+        value = self.settings.style.get_int("pane-label-font-size")
+        self.get_widget("pane_label_font_size").set_value(value)
 
         value = self.settings.styleBackground.get_int("transparency")
         self.get_widget("background_transparency").set_value(MAX_TRANSPARENCY - value)

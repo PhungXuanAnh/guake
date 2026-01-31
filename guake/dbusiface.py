@@ -178,6 +178,20 @@ class DbusManager(dbus.service.Object):
     def rename_current_tab(self, new_text):
         self.guake.rename_current_tab(new_text, True)
 
+    @dbus.service.method(DBUS_NAME, in_signature="is")
+    def rename_pane(self, term_index, new_name):
+        """Rename the pane (terminal) at the given index in the current tab."""
+        notebook = self.guake.get_notebook()
+        current_page_index = notebook.get_current_page()
+        terminals = notebook.get_terminals_for_page(current_page_index)
+        if term_index < len(terminals):
+            terminal = terminals[term_index]
+            terminal_box = terminal.get_terminal_box()
+            if terminal_box:
+                # Reset to default if name is "-"
+                name = "" if new_name == "-" else new_name
+                terminal_box.set_pane_name(name)
+
     @dbus.service.method(DBUS_NAME)
     def show_about(self):
         self.guake.show_about()
@@ -200,20 +214,20 @@ class DbusManager(dbus.service.Object):
 
     @dbus.service.method(DBUS_NAME, in_signature="i")
     def v_split_current_terminal(self, split_percentage: int):
-        self.guake.get_notebook().get_current_terminal().get_parent().split_v(split_percentage)
+        self.guake.get_notebook().get_current_terminal().get_terminal_box().split_v(split_percentage)
 
     @dbus.service.method(DBUS_NAME, in_signature="i")
     def h_split_current_terminal(self, split_percentage: int):
-        self.guake.get_notebook().get_current_terminal().get_parent().split_h(split_percentage)
+        self.guake.get_notebook().get_current_terminal().get_terminal_box().split_h(split_percentage)
 
     @dbus.service.method(DBUS_NAME, in_signature="si")
     def v_split_current_terminal_with_command(self, command, split_percentage: int):
-        self.guake.get_notebook().get_current_terminal().get_parent().split_v(split_percentage)
+        self.guake.get_notebook().get_current_terminal().get_terminal_box().split_v(split_percentage)
         self.guake.execute_command(command)
 
     @dbus.service.method(DBUS_NAME, in_signature="si")
     def h_split_current_terminal_with_command(self, command, split_percentage: int):
-        self.guake.get_notebook().get_current_terminal().get_parent().split_h(split_percentage)
+        self.guake.get_notebook().get_current_terminal().get_terminal_box().split_h(split_percentage)
         self.guake.execute_command(command)
 
     @dbus.service.method(DBUS_NAME, in_signature="s", out_signature="i")

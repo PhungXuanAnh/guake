@@ -370,6 +370,18 @@ def main():
     )
 
     parser.add_argument(
+        "--rename-pane",
+        dest="rename_pane",
+        metavar="NAME",
+        action="store",
+        default="",
+        help=_(
+            "Rename the pane specified by --select-terminal (-S). "
+            'Reset to default if NAME is a single dash "-".'
+        ),
+    )
+
+    parser.add_argument(
         "-q",
         "--quit",
         dest="quit",
@@ -648,6 +660,11 @@ def main():
 
     if options.rename_current_tab:
         remote_object.rename_current_tab(options.rename_current_tab)
+        only_show_hide = options.show
+
+    if options.rename_pane:
+        term_index = int(options.select_terminal) if options.select_terminal else 0
+        remote_object.rename_pane(term_index, options.rename_pane)
         only_show_hide = options.show
 
     if options.show_about:

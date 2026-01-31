@@ -5,9 +5,9 @@ from gi.repository import Gtk
 
 
 class RenameDialog(Gtk.Dialog):
-    def __init__(self, window, current_name):
+    def __init__(self, window, current_name, title=None):
         super().__init__(
-            _("Rename tab"),
+            title or _("Rename tab"),
             window,
             Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
             (
@@ -35,6 +35,13 @@ class RenameDialog(Gtk.Dialog):
 
     def get_text(self):
         return self.entry.get_text()
+
+
+class RenamePaneDialog(RenameDialog):
+    """Dialog for renaming a terminal pane."""
+
+    def __init__(self, window, current_name=""):
+        super().__init__(window, current_name, title=_("Rename pane"))
 
 
 class PromptQuitDialog(Gtk.MessageDialog):

@@ -217,6 +217,7 @@ class RootTerminalBox(Gtk.Overlay, TerminalHolder):
                     "directory": directory,
                     "command": getattr(box.terminal, "startup_command", None),
                     "custom_colors": box.terminal.get_custom_colors_dict(),
+                    "pane_name": box.get_pane_name(),
                 }
             )
 
@@ -267,8 +268,8 @@ class RootTerminalBox(Gtk.Overlay, TerminalHolder):
                 for i in term.handler_ids:
                     term.disconnect(i)
                 term.handler_ids = []
-                box.remove(box.scroll)
-                box.remove(term)
+                box.terminal_hbox.remove(box.scroll)
+                box.terminal_hbox.remove(term)
                 box.unset_terminal()
 
             # Replace term in the TerminalBox
@@ -276,6 +277,10 @@ class RootTerminalBox(Gtk.Overlay, TerminalHolder):
             term.set_custom_colors_from_dict(cur.get("custom_colors", None))
             box.set_terminal(term)
             self.get_notebook().terminal_attached(term)
+
+            # Restore pane name if saved
+            if cur.get("pane_name"):
+                box.set_pane_name(cur["pane_name"])
 
             # Execute startup command if specified in session
             if cur.get("command"):
@@ -391,11 +396,41 @@ class RootTerminalBox(Gtk.Overlay, TerminalHolder):
 
 
 class TerminalBox(Gtk.Box, TerminalHolder):
-    """A box to group the terminal and a scrollbar."""
+    """A box to group the terminal and a scrollbar, with optional pane name label."""
 
     def __init__(self):
-        super().__init__(orientation=Gtk.Orientation.HORIZONTAL)
+        super().__init__(orientation=Gtk.Orientation.VERTICAL)
         self.terminal = None
+        self.pane_name = ""
+
+        # Create the pane name label (hidden by default)
+        self.pane_label = Gtk.Label()
+        self.pane_label.set_xalign(0)  # Left align
+        self.pane_label.set_margin_start(5)
+        self.pane_label.set_margin_end(5)
+        self.pane_label.set_margin_top(2)
+        self.pane_label.set_margin_bottom(2)
+        self.pane_label.get_style_context().add_class("pane-name-label")
+        self.pane_label.set_no_show_all(True)  # Don't show with show_all()
+        self.pack_start(self.pane_label, False, False, 0)
+
+        # Create horizontal box to hold terminal and scrollbar
+        self.terminal_hbox = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        self.pack_start(self.terminal_hbox, True, True, 0)
+        self.terminal_hbox.show()
+
+    def set_pane_name(self, name):
+        """Set the pane name and show/hide the label accordingly."""
+        self.pane_name = name if name else ""
+        if self.pane_name:
+            self.pane_label.set_text(self.pane_name)
+            self.pane_label.show()
+        else:
+            self.pane_label.hide()
+
+    def get_pane_name(self):
+        """Get the current pane name."""
+        return self.pane_name
 
     def set_terminal(self, terminal):
         """Packs the terminal widget."""
@@ -411,7 +446,7 @@ class TerminalBox(Gtk.Box, TerminalHolder):
         self.terminal.handler_ids.append(
             self.terminal.connect("child-exited", self.on_terminal_exited)
         )
-        self.pack_start(self.terminal, True, True, 0)
+        self.terminal_hbox.pack_start(self.terminal, True, True, 0)
         self.terminal.show()
         self.add_scroll_bar()
 
@@ -420,7 +455,7 @@ class TerminalBox(Gtk.Box, TerminalHolder):
         adj = self.terminal.get_vadjustment()
         self.scroll = Gtk.Scrollbar.new(Gtk.Orientation.VERTICAL, adj)
         self.scroll.show()
-        self.pack_start(self.scroll, False, False, 0)
+        self.terminal_hbox.pack_start(self.scroll, False, False, 0)
 
         self.terminal.handler_ids.append(
             self.terminal.connect("scroll-event", self.__scroll_event_cb)

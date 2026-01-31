@@ -43,7 +43,7 @@ class FocusMover:
 
         search_x = tx + tw + FocusMover.THRESHOLD
         search_y = ty + (th / 2) - FocusMover.BORDER_THICKNESS
-        for term in terminal.get_parent().get_root_box().iter_terminals():
+        for term in terminal.get_terminal_box().get_root_box().iter_terminals():
             sx, sy, sw, sh = self.list_allocation(term)
             if sx <= search_x <= sx + sw and sy <= search_y <= sy + sh:
                 term.grab_focus()
@@ -57,7 +57,7 @@ class FocusMover:
 
         search_x = tx - FocusMover.THRESHOLD
         search_y = ty + (th / 2) - FocusMover.BORDER_THICKNESS
-        for term in terminal.get_parent().get_root_box().iter_terminals():
+        for term in terminal.get_terminal_box().get_root_box().iter_terminals():
             sx, sy, sw, sh = self.list_allocation(term)
             if sx <= search_x <= sx + sw and sy <= search_y <= sy + sh:
                 term.grab_focus()
@@ -70,7 +70,7 @@ class FocusMover:
 
         search_x = tx + (tw / 2) - FocusMover.BORDER_THICKNESS
         search_y = ty - FocusMover.THRESHOLD
-        for term in terminal.get_parent().get_root_box().iter_terminals():
+        for term in terminal.get_terminal_box().get_root_box().iter_terminals():
             sx, sy, sw, sh = self.list_allocation(term)
             if sx <= search_x <= sx + sw and sy <= search_y <= sy + sh:
                 term.grab_focus()
@@ -84,14 +84,14 @@ class FocusMover:
 
         search_x = tx + (tw / 2) - FocusMover.BORDER_THICKNESS
         search_y = ty + th + FocusMover.THRESHOLD
-        for term in terminal.get_parent().get_root_box().iter_terminals():
+        for term in terminal.get_terminal_box().get_root_box().iter_terminals():
             sx, sy, sw, sh = self.list_allocation(term)
             if sx <= search_x <= sx + sw and sy <= search_y <= sy + sh:
                 term.grab_focus()
 
     def list_allocation(self, terminal):
-        terminal_rect = terminal.get_parent().get_allocation()
-        x, y = terminal.get_parent().translate_coordinates(self.window, 0, 0)
+        terminal_rect = terminal.get_terminal_box().get_allocation()
+        x, y = terminal.get_terminal_box().translate_coordinates(self.window, 0, 0)
         return x, y, terminal_rect.width, terminal_rect.height
 
 
@@ -102,7 +102,7 @@ class SplitMover:
 
     @classmethod
     def move_up(cls, terminal):
-        box = terminal.get_parent()
+        box = terminal.get_terminal_box()
         while not isinstance(box, RootTerminalBox):
             box = box.get_parent()
             if (
@@ -118,7 +118,7 @@ class SplitMover:
 
     @classmethod
     def move_down(cls, terminal):
-        box = terminal.get_parent()
+        box = terminal.get_terminal_box()
         while not isinstance(box, RootTerminalBox):
             box = box.get_parent()
             if (
@@ -134,7 +134,7 @@ class SplitMover:
 
     @classmethod
     def move_right(cls, terminal):
-        box = terminal.get_parent()
+        box = terminal.get_terminal_box()
         while not isinstance(box, RootTerminalBox):
             box = box.get_parent()
             if (
@@ -150,7 +150,7 @@ class SplitMover:
 
     @classmethod
     def move_left(cls, terminal):
-        box = terminal.get_parent()
+        box = terminal.get_terminal_box()
         while not isinstance(box, RootTerminalBox):
             box = box.get_parent()
             if (
