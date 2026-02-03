@@ -169,8 +169,8 @@ uninstall-schemas:
 
 reinstall:
 	sudo make uninstall && make && sudo make install 
-	guake-restore
-	$(DESTDIR)$(bindir)/guake
+	dconf reset -f /org/guake/
+	dconf load /org/guake/ < ${HOME}/Dropbox/Work/Other/conf.d/guake/config.ini
 
 reinstall-v:
 	sudo make uninstall && make && sudo make install && $(DESTDIR)$(bindir)/guake -v

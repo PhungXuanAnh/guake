@@ -305,3 +305,82 @@ def test_load_config_for_terminal_skips_global_window_geometry():
     assert "window-height" not in general_keys
     assert "window-width" not in general_keys
     assert ("use-scrollbar", {"terminal_uuid": "term-1"}) in app.settings.general.calls
+
+
+# Pane Zoom Tests
+
+
+def test_accel_pane_zoom_in(mocker, g):
+    """Test that pane zoom in increases the font scale of the current terminal only."""
+    # Disable auto save to avoid side effects
+    mocker.patch.object(g.settings.general, "get_boolean", return_value=False)
+
+    term = g.get_notebook().get_current_terminal()
+    initial_scale = term.font_scale_index
+
+    result = g.accel_pane_zoom_in()
+
+    assert result is True
+    assert term.font_scale_index == initial_scale + 1
+
+
+def test_accel_pane_zoom_out(mocker, g):
+    """Test that pane zoom out decreases the font scale of the current terminal only."""
+    # Disable auto save to avoid side effects
+    mocker.patch.object(g.settings.general, "get_boolean", return_value=False)
+
+    term = g.get_notebook().get_current_terminal()
+    initial_scale = term.font_scale_index
+
+    result = g.accel_pane_zoom_out()
+
+    assert result is True
+    assert term.font_scale_index == initial_scale - 1
+
+
+def test_accel_pane_zoom_saves_tabs_when_enabled(mocker, g):
+    """Test that pane zoom triggers save_tabs when save-tabs-when-changed is enabled."""
+    # Enable auto save
+    mocker.patch.object(g.settings.general, "get_boolean", return_value=True)
+    mock_save = mocker.patch.object(g, "save_tabs")
+
+    g.accel_pane_zoom_in()
+    assert mock_save.call_count == 1
+
+    g.accel_pane_zoom_out()
+    assert mock_save.call_count == 2
+
+
+def test_accel_pane_zoom_no_save_when_disabled(mocker, g):
+    """Test that pane zoom does not trigger save_tabs when save-tabs-when-changed is disabled."""
+    # Disable auto save
+    mocker.patch.object(g.settings.general, "get_boolean", return_value=False)
+    mock_save = mocker.patch.object(g, "save_tabs")
+
+    g.accel_pane_zoom_in()
+    g.accel_pane_zoom_out()
+
+    assert mock_save.call_count == 0
+
+
+def test_pane_zoom_independent_of_other_terminals(mocker, g):
+    """Test that pane zoom only affects the current terminal, not others."""
+    # Disable auto save to avoid side effects
+    mocker.patch.object(g.settings.general, "get_boolean", return_value=False)
+
+    # Get the first terminal
+    term1 = g.get_notebook().get_current_terminal()
+    initial_scale1 = term1.font_scale_index
+
+    # Add a new tab with a second terminal
+    g.add_tab()
+    term2 = g.get_notebook().get_current_terminal()
+    initial_scale2 = term2.font_scale_index
+
+    # Zoom in on the second terminal (current one)
+    g.accel_pane_zoom_in()
+    g.accel_pane_zoom_in()
+
+    # Verify that only the second terminal's scale changed
+    assert term2.font_scale_index == initial_scale2 + 2
+    assert term1.font_scale_index == initial_scale1  # First terminal unchanged

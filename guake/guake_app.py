@@ -995,6 +995,25 @@ class Guake(SimpleGladeApp):
             term.set_font_scale((new_size - 1) / new_size)
         return True
 
+    def accel_pane_zoom_in(self, *args):
+        """Callback to zoom in only the current pane."""
+        term = self.get_notebook().get_current_terminal()
+        if term:
+            term.increase_font_size()
+            if self.settings.general.get_boolean("save-tabs-when-changed"):
+                self.save_tabs()
+        return True
+
+    def accel_pane_zoom_out(self, *args):
+        """Callback to zoom out only the current pane."""
+        term = self.get_notebook().get_current_terminal()
+        if term:
+            term.decrease_font_size()
+            if self.settings.general.get_boolean("save-tabs-when-changed"):
+                self.save_tabs()
+        return True
+
+
     def accel_increase_height(self, *args):
         """Callback to increase height."""
         height = self.settings.general.get_int("window-height")

@@ -559,6 +559,21 @@
             <summary>Zoom out.</summary>
             <description>Decrease the font size of the terminals.</description>
         </key>
+        <key name="pane-zoom-in" type="s">
+            <default>'&lt;Control&gt;&lt;Alt&gt;plus'</default>
+            <summary>Zoom in current pane.</summary>
+            <description>Increase the font size of only the currently focused terminal pane.</description>
+        </key>
+        <key name="pane-zoom-in-alt" type="s">
+            <default>'&lt;Control&gt;&lt;Alt&gt;equal'</default>
+            <summary>Zoom in current pane (alternative)</summary>
+            <description>Additional shortcut for zooming in the current pane.</description>
+        </key>
+        <key name="pane-zoom-out" type="s">
+            <default>'&lt;Control&gt;&lt;Alt&gt;minus'</default>
+            <summary>Zoom out current pane.</summary>
+            <description>Decrease the font size of only the currently focused terminal pane.</description>
+        </key>
         <key name="increase-height" type="s">
             <default>'&lt;Control&gt;Down'</default>
             <summary>Increase height.</summary>

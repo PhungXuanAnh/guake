@@ -227,6 +227,7 @@ class RootTerminalBox(Gtk.Overlay, TerminalHolder):
                     "command": getattr(box.terminal, "startup_command", None),
                     "custom_colors": box.terminal.get_custom_colors_dict(),
                     "pane_name": box.get_pane_name(),
+                    "font_scale": box.terminal.font_scale_index,
                 }
             )
 
@@ -292,6 +293,10 @@ class RootTerminalBox(Gtk.Overlay, TerminalHolder):
             # Restore pane name if saved
             if cur.get("pane_name"):
                 box.set_pane_name(cur["pane_name"])
+
+            # Restore font scale if saved
+            if cur.get("font_scale") is not None:
+                term.font_scale = cur["font_scale"]
 
             # Execute startup command if specified in session
             if cur.get("command"):
