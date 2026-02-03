@@ -20,6 +20,7 @@ Boston, MA 02110-1301 USA
 """
 import json
 import logging
+import math
 import os
 import shutil
 import subprocess
@@ -49,6 +50,8 @@ from guake import guake_version
 from guake import notifier
 from guake import vte_version
 from guake.about import AboutDialog
+from guake.boxes import DegenerateAllocationError
+from guake.boxes import MIN_PANE_ALLOC_PX
 from guake.common import gladefile
 from guake.common import pixmapfile
 from guake.dialogs import PromptQuitDialog
@@ -201,6 +204,30 @@ class Guake(SimpleGladeApp):
         # FullscreenManager
         self.fullscreen_manager = FullscreenManager(self.settings, self.window, self)
 
+        # Window size tracking for multi-monitor pane adjustment
+        # When moving between monitors with different resolutions, we need to
+        # adjust pane positions proportionally to prevent panes from disappearing
+        self._last_window_width = 0
+        self._last_window_height = 0
+        self._pane_adjust_timeout_id = None
+
+        # Flag to prevent pane adjustments during session restoration
+        # During restoration, window size may change but we don't want to scale
+        # the pane positions since they're being set from saved ratios
+        self._session_restoring = False
+
+        # Flag to reset window size tracking on next show
+        # This is set after session restoration to prevent the first show
+        # from triggering pane adjustments
+        self._pending_size_reset = False
+        self._pane_ratio_adjusting = False
+        self._pane_ratio_reapply_timeout_id = None
+
+        # Coalescing token for deferred save_tabs() retries scheduled by
+        # _reschedule_save_tabs() when a save was aborted because pane
+        # widgets did not have a real allocation yet.
+        self._pending_save_tabs_id = None
+
         # Start the file manager (only used by guake.yml so far).
         self.fm = FileManager()
 
@@ -249,6 +276,7 @@ class Guake(SimpleGladeApp):
 
         self.window.connect("delete-event", destroy)
         self.window.connect("window-state-event", window_event)
+        self.window.connect("configure-event", self._on_window_configure)
 
         # this line is important to resize the main window and make it
         # smaller.
@@ -544,6 +572,220 @@ class Guake(SimpleGladeApp):
     def on_window_takefocus(self, window, event):
         self.takefocus_time = get_server_time(self.window)
 
+    def _cancel_pending_pane_adjustment(self, reason):
+        if self._pane_adjust_timeout_id is None:
+            return
+        log.debug("Cancelling pending pane adjustment: %s", reason)
+        GLib.source_remove(self._pane_adjust_timeout_id)
+        self._pane_adjust_timeout_id = None
+
+    def _cancel_pending_pane_ratio_reapply(self, reason):
+        if getattr(self, "_pane_ratio_reapply_timeout_id", None) is None:
+            return
+        log.debug("Cancelling pending pane ratio reapply: %s", reason)
+        GLib.source_remove(self._pane_ratio_reapply_timeout_id)
+        self._pane_ratio_reapply_timeout_id = None
+        self._pane_ratio_adjusting = False
+
+    def _on_window_configure(self, window, event):
+        """Handle window configure (resize/move) events.
+
+        When the window size changes significantly (e.g., moving to a monitor with
+        different resolution), adjust all pane positions proportionally to prevent
+        panes from disappearing.
+        """
+        new_width = event.width
+        new_height = event.height
+
+        log.debug(
+            "Window configure event: new_size=(%d, %d), last_size=(%d, %d), restoring=%s",
+            new_width,
+            new_height,
+            self._last_window_width,
+            self._last_window_height,
+            self._session_restoring,
+        )
+
+        # Skip pane adjustments during session restoration
+        # Panes are being set from saved ratios, we don't want to scale them
+        if self._session_restoring:
+            log.debug("Session restoration in progress, skipping pane adjustment")
+            self._last_window_width = new_width
+            self._last_window_height = new_height
+            return False
+
+        # Skip pane adjustments while waiting for first show after restoration
+        # The window size will be reset properly in show() when the window is actually displayed
+        if self._pending_size_reset:
+            log.debug("Pending size reset, skipping pane adjustment until window is shown")
+            self._last_window_width = new_width
+            self._last_window_height = new_height
+            return False
+
+        # Skip if this is the first configure event (no previous size to compare)
+        if self._last_window_width == 0 or self._last_window_height == 0:
+            log.debug("First configure event, storing initial size")
+            self._last_window_width = new_width
+            self._last_window_height = new_height
+            return False
+
+        # Calculate size change percentage
+        width_change = abs(new_width - self._last_window_width) / max(1, self._last_window_width)
+        height_change = abs(new_height - self._last_window_height) / max(
+            1, self._last_window_height
+        )
+
+        log.debug(
+            "Size change: width_change=%.2f%%, height_change=%.2f%%",
+            width_change * 100,
+            height_change * 100,
+        )
+
+        # Only adjust if size changed significantly (more than 5%)
+        # This filters out small adjustments and focuses on monitor changes
+        if width_change > 0.05 or height_change > 0.05:
+            log.debug("Significant size change detected, scheduling pane adjustment")
+            # Cancel any pending adjustment
+            if self._pane_adjust_timeout_id is not None:
+                GLib.source_remove(self._pane_adjust_timeout_id)
+
+            # Store the old and new sizes for the adjustment
+            old_width = self._last_window_width
+            old_height = self._last_window_height
+
+            # Debounce the adjustment - wait for resize to settle
+            self._pane_adjust_timeout_id = GLib.timeout_add(
+                100,
+                lambda: self._do_adjust_all_pane_positions(
+                    old_width, old_height, new_width, new_height
+                ),
+            )
+        else:
+            log.debug("Size change below threshold, skipping adjustment")
+
+        # Update tracked size
+        self._last_window_width = new_width
+        self._last_window_height = new_height
+
+        return False
+
+    def _do_adjust_all_pane_positions(self, old_width, old_height, new_width, new_height):
+        """Actually perform the pane position and font size adjustment.
+
+        This is called after debouncing to avoid excessive recalculations
+        during continuous window resize operations.
+
+        Font sizes are scaled proportionally based on width changes to maintain
+        readability when moving between monitors with different resolutions.
+        """
+        self._pane_adjust_timeout_id = None
+
+        # Calculate scale factors
+        width_scale = new_width / max(1, old_width)
+        height_scale = new_height / max(1, old_height)
+
+        log.debug(
+            "Adjusting pane positions and font sizes: old=(%d, %d), new=(%d, %d), scale=(%.2f, %.2f)",
+            old_width,
+            old_height,
+            new_width,
+            new_height,
+            width_scale,
+            height_scale,
+        )
+
+        self._schedule_pane_ratio_reapply(width_scale, height_scale, "window size change")
+
+        # Also adjust font sizes for all terminals based on width scale
+        # The font_scale_index uses a logarithmic scale: 2^(index/6)
+        # To scale font by width_scale, we need: 2^(new_index/6) = width_scale * 2^(old_index/6)
+        # Solving: new_index = old_index + 6 * log2(width_scale)
+        if width_scale != 1.0:
+            font_scale_delta = round(6 * math.log2(width_scale))
+            if font_scale_delta != 0:
+                log.debug(
+                    "Adjusting font scale: width_scale=%.2f, font_scale_delta=%d",
+                    width_scale,
+                    font_scale_delta,
+                )
+                terminal_count = 0
+                for terminal in self.notebook_manager.iter_terminals():
+                    old_index = terminal.font_scale_index
+                    new_index = old_index + font_scale_delta
+                    terminal.set_font_scale_index(new_index)
+                    log.debug(
+                        "Terminal %d: font_scale_index %d -> %d",
+                        terminal_count,
+                        old_index,
+                        new_index,
+                    )
+                    terminal_count += 1
+                log.debug("Adjusted font scale on %d terminals", terminal_count)
+
+        return False  # Don't repeat the timeout
+
+    def _schedule_pane_ratio_reapply(
+        self,
+        width_scale,
+        height_scale,
+        reason,
+        passes=5,
+        interval_ms=150,
+        on_complete=None,
+    ):
+        """Run several ratio-apply passes while GTK settles nested allocations."""
+        if getattr(self, "_pane_ratio_reapply_timeout_id", None) is not None:
+            GLib.source_remove(self._pane_ratio_reapply_timeout_id)
+            self._pane_ratio_reapply_timeout_id = None
+
+        self._pane_ratio_adjusting = True
+        pass_index = 0
+
+        def _run_pass():
+            nonlocal pass_index
+            pass_index += 1
+            self._pane_ratio_reapply_timeout_id = None
+            self._reapply_all_pane_ratios(
+                width_scale,
+                height_scale,
+                f"{reason} pass {pass_index}/{passes}",
+            )
+
+            if pass_index >= passes:
+                self._pane_ratio_adjusting = False
+                if on_complete is not None:
+                    on_complete()
+                return False
+
+            self._pane_ratio_reapply_timeout_id = GLib.timeout_add(interval_ms, _run_pass)
+            return False
+
+        _run_pass()
+
+    def _reapply_all_pane_ratios(self, width_scale, height_scale, reason):
+        """Reapply remembered pane ratios while suppressing transient autosaves."""
+        page_count = 0
+        manage_suppression = not getattr(self, "_pane_ratio_adjusting", False)
+        if manage_suppression:
+            self._pane_ratio_adjusting = True
+        try:
+            notebook_manager = getattr(self, "notebook_manager", None)
+            if notebook_manager is None:
+                log.debug("Skipping pane ratio reapply without notebook manager: %s", reason)
+                return
+
+            for notebook in notebook_manager.iter_notebooks():
+                for page in notebook.iter_pages():
+                    if hasattr(page, "adjust_panes_for_new_size"):
+                        log.debug("Reapplying pane ratios on page %d: %s", page_count, reason)
+                        page.adjust_panes_for_new_size(width_scale, height_scale)
+                        page_count += 1
+        finally:
+            if manage_suppression:
+                self._pane_ratio_adjusting = False
+
+        log.debug("Reapplied pane ratios on %d pages: %s", page_count, reason)
+
     def show_menu(self, status_icon, button, activate_time):
         """Show the tray icon menu."""
         menu = self.get_widget("tray-menu")
@@ -692,6 +934,32 @@ class Guake(SimpleGladeApp):
 
     def show(self):
         """Shows the main window and grabs the focus on it."""
+        try:
+            _alloc = self.window.get_allocation()
+            _visible = self.window.get_property("visible")
+        except Exception:  # noqa: BLE001
+            _alloc = None
+            _visible = False
+        was_hidden = self.hidden or not _visible
+        log.debug(
+            "[SHOW] entering show() session_restoring=%s pending_size_reset=%s "
+            "was_hidden=%s last_tracked=(w=%d,h=%d) current_alloc=(w=%d,h=%d)",
+            getattr(self, "_session_restoring", False),
+            getattr(self, "_pending_size_reset", False),
+            was_hidden,
+            self._last_window_width,
+            self._last_window_height,
+            _alloc.width if _alloc else -1,
+            _alloc.height if _alloc else -1,
+        )
+        if was_hidden:
+            # Showing a hidden Gtk.Window often emits transient configure
+            # events for the requested size followed by the final WM-adjusted
+            # size. Those are not real monitor changes; scaling panes/fonts
+            # from them makes font_scale_index grow on every show/hide cycle.
+            self._pending_size_reset = True
+            self._cancel_pending_pane_adjustment("show transition")
+
         self.hidden = False
 
         # setting window in all desktops
@@ -757,7 +1025,11 @@ class Guake(SimpleGladeApp):
         self.restore_pending_terminal_split()
         self.execute_hook("show")
 
-        if not self.fullscreen_manager.is_fullscreen():
+        # After a hidden->shown transition, reset window size tracking once the
+        # final allocation has settled. This prevents transient configure
+        # events during show from triggering pane/font scaling.
+        if self._pending_size_reset:
+            # Use a slight delay to ensure window is fully shown and sized
             GLib.timeout_add(100, self._finish_show_size_reset)
 
     def _finish_show_size_reset(self):
@@ -768,14 +1040,43 @@ class Guake(SimpleGladeApp):
             )
             RectCalculator.set_final_window_rect(self.settings, self.window)
 
+        # Reapplying the rect can emit delayed configure events. Keep
+        # _pending_size_reset true until those events settle, otherwise they
+        # are mistaken for monitor-size changes and trigger font scaling.
+        GLib.timeout_add(150, self._complete_show_size_reset)
+        return False
+
+    def _complete_show_size_reset(self):
+        self._schedule_pane_ratio_reapply(
+            1.0,
+            1.0,
+            "show size reset",
+            on_complete=self._complete_show_size_reset_after_panes,
+        )
+        return False
+
+    def _complete_show_size_reset_after_panes(self):
         alloc = self.window.get_allocation()
+        try:
+            visible = self.window.get_property("visible")
+        except AttributeError:
+            visible = True
+        if not visible or alloc.width < MIN_PANE_ALLOC_PX or alloc.height < MIN_PANE_ALLOC_PX:
+            log.debug(
+                "Skipping window size tracking reset after show: " "visible=%s alloc=(%d, %d)",
+                visible,
+                alloc.width,
+                alloc.height,
+            )
+            return False
+
         self._last_window_width = alloc.width
         self._last_window_height = alloc.height
-        if hasattr(self, "_pending_size_reset"):
-            self._pending_size_reset = False
+        self._pending_size_reset = False
         log.debug(
             "Window size tracking reset after show: (%d, %d)",
-            alloc.width, alloc.height,
+            alloc.width,
+            alloc.height,
         )
         return False
 
@@ -802,6 +1103,7 @@ class Guake(SimpleGladeApp):
         """
         if not HidePrevention(self.window).may_hide():
             return
+        self._cancel_pending_pane_ratio_reapply("hide")
         self.hidden = True
         self.get_widget("window-root").unstick()
         self.window.hide()  # Don't use hide_all here!
@@ -1012,7 +1314,6 @@ class Guake(SimpleGladeApp):
             if self.settings.general.get_boolean("save-tabs-when-changed"):
                 self.save_tabs()
         return True
-
 
     def accel_increase_height(self, *args):
         """Callback to increase height."""
@@ -1477,6 +1778,21 @@ class Guake(SimpleGladeApp):
         return Path(xdg_config_home, "guake").expanduser()
 
     def save_tabs(self, filename="session.json"):
+        try:
+            _alloc = self.window.get_allocation()
+            _vis = self.window.get_property("visible")
+        except Exception:  # noqa: BLE001
+            _alloc, _vis = None, "?"
+        log.debug(
+            "[SAVE-TABS] called filename=%s session_restoring=%s window_visible=%s "
+            "window_alloc=(w=%d,h=%d) caller=%s",
+            filename,
+            getattr(self, "_session_restoring", False),
+            _vis,
+            _alloc.width if _alloc else -1,
+            _alloc.height if _alloc else -1,
+            "<see-stack>",
+        )
         config = {
             "schema_version": TABS_SESSION_SCHEMA_VERSION,
             "timestamp": int(pytime.time()),
@@ -1500,6 +1816,22 @@ class Guake(SimpleGladeApp):
                 except FileNotFoundError:
                     # discard same broken tabs
                     pass
+                except DegenerateAllocationError as e:
+                    # A pane in this tab does not yet have a real allocation
+                    # (typical right after restoration / show, when GTK has
+                    # not finished laying out the freshly-spawned widgets).
+                    # Saving now would write nonsense ratios like -21000 to
+                    # session.json. Abort the whole save and reschedule it
+                    # for a moment later, when the widgets have settled.
+                    log.warning(
+                        "[SAVE-TABS-ABORT] tab=%d notebook=%s reason=%s "
+                        "-> rescheduling save in 250ms",
+                        index,
+                        key,
+                        e,
+                    )
+                    self._reschedule_save_tabs(filename)
+                    return False
             # NOTE: Maybe we will have frame inside the workspace in future
             #       So lets use list to store the tabs (as for each frame)
             config["workspace"][key] = [tabs]
@@ -1510,6 +1842,25 @@ class Guake(SimpleGladeApp):
         with session_file.open("w", encoding="utf-8") as f:
             json.dump(config, f, ensure_ascii=False, indent=4)
         log.info("Guake tabs saved to %s", session_file)
+        return True
+
+    def _reschedule_save_tabs(self, filename="session.json"):
+        """Schedule a single deferred save_tabs() call."""
+        if getattr(self, "_pending_save_tabs_id", None) is not None:
+            log.debug("[SAVE-TABS-RESCHEDULE] already pending, skipping")
+            return
+
+        def _do_pending_save():
+            self._pending_save_tabs_id = None
+            log.debug("[SAVE-TABS-RESCHEDULE] firing deferred save_tabs(%s)", filename)
+            try:
+                self.save_tabs(filename)
+            except Exception:  # noqa: BLE001
+                log.exception("[SAVE-TABS-RESCHEDULE] deferred save_tabs failed")
+            return False
+
+        self._pending_save_tabs_id = GLib.timeout_add(250, _do_pending_save)
+        log.debug("[SAVE-TABS-RESCHEDULE] scheduled deferred save in 250ms")
 
     def restore_tabs(self, filename="session.json", suppress_notify=False):
         session_file = self.get_xdg_config_directory() / filename
@@ -1569,6 +1920,26 @@ class Guake(SimpleGladeApp):
         v = self.settings.general.get_boolean("save-tabs-when-changed")
         self.settings.general.set_boolean("save-tabs-when-changed", False)
 
+        # Block pane adjustments during restoration
+        # This prevents configure-event from scaling pane positions while we're setting them
+        self._session_restoring = True
+        try:
+            _alloc = self.window.get_allocation()
+            _visible = self.window.get_property("visible")
+        except Exception:  # noqa: BLE001
+            _alloc, _visible = None, "?"
+        log.debug(
+            "[RESTORE-START] file=%s save_tabs_when_changed_was=%s window_visible=%s "
+            "window_alloc=(w=%d,h=%d) last_tracked=(w=%d,h=%d)",
+            session_file,
+            v,
+            _visible,
+            _alloc.width if _alloc else -1,
+            _alloc.height if _alloc else -1,
+            self._last_window_width,
+            self._last_window_height,
+        )
+
         # Restore all tabs for all workspaces
         self.pending_restore_page_split = []
         self._failed_restore_page_split = []
@@ -1621,6 +1992,35 @@ class Guake(SimpleGladeApp):
 
         # Reset auto save tabs
         self.settings.general.set_boolean("save-tabs-when-changed", v)
+
+        # Restoration complete - allow pane adjustments again
+        # Use a slight delay to ensure UI has stabilized
+        def _finish_restoration():
+            self._session_restoring = False
+            # The window is likely still hidden at this point with a small allocation.
+            # Set the pending flag so that on first show(), we reset window size tracking
+            # to the actual full-screen size. This prevents the hidden->shown size change
+            # from triggering unwanted pane adjustments.
+            self._pending_size_reset = True
+            # Set last size to 0 so that any configure events before show() will just
+            # update the size without triggering adjustments
+            self._last_window_width = 0
+            self._last_window_height = 0
+            try:
+                _a = self.window.get_allocation()
+                _vis = self.window.get_property("visible")
+            except Exception:  # noqa: BLE001
+                _a, _vis = None, "?"
+            log.debug(
+                "[RESTORE-FINISH] session_restoring=False pending_size_reset=True "
+                "window_visible=%s window_alloc=(w=%d,h=%d)",
+                _vis,
+                _a.width if _a else -1,
+                _a.height if _a else -1,
+            )
+            return False  # Don't repeat
+
+        GLib.timeout_add(200, _finish_restoration)
 
         # Notify the user
         if self.settings.general.get_boolean("restore-tabs-notify") and not suppress_notify:

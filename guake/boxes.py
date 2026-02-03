@@ -26,6 +26,16 @@ from guake.utils import save_tabs_when_changed
 
 log = logging.getLogger(__name__)
 
+# Minimum allocation (in pixels) below which a Gtk.Paned is considered to have
+# no real geometry yet. Saving a pane ratio with allocation smaller than this
+# would produce garbage values when GTK is still settling hidden/shown windows.
+MIN_PANE_ALLOC_PX = 10
+
+
+class DegenerateAllocationError(RuntimeError):
+    """Raised when a pane has no usable allocation yet."""
+
+
 # TODO remove calls to guake
 
 
@@ -196,6 +206,32 @@ class RootTerminalBox(Gtk.Overlay, TerminalHolder):
     def get_root_box(self):
         return self
 
+    def adjust_panes_for_new_size(self, width_scale, height_scale):
+        """Recursively restore pane positions after the window size changes.
+
+        Gtk.Paned positions are relative to their own allocation, not the top-level
+        window. Nested panes must therefore reapply their remembered split
+        percentage against their current allocation instead of using one global
+        window scale.
+        """
+        log.debug(
+            "adjust_panes_for_new_size called with scale=(%.2f, %.2f); "
+            "reapplying stored split percentages",
+            width_scale,
+            height_scale,
+        )
+        self._apply_stored_pane_positions(self.get_child())
+
+    def _apply_stored_pane_positions(self, box):
+        """Recursively apply each pane's remembered split percentage."""
+        if box is None:
+            return
+
+        if isinstance(box, DualTerminalBox):
+            box.apply_stored_split_percentage()
+            self._apply_stored_pane_positions(box.get_child1())
+            self._apply_stored_pane_positions(box.get_child2())
+
     def save_box_layout(self, box, panes: list):
         """Save box layout with pre-order traversal, it should result `panes` with
         a full binary tree in list.
@@ -212,8 +248,46 @@ class RootTerminalBox(Gtk.Overlay, TerminalHolder):
                 total = allocation.height
             else:
                 total = allocation.width
-            # Ratio is calculated as percentage of the first child (100 - position/total * 100)
-            ratio = int(100 - (position / total * 100)) if total > 0 else 50
+            # Guard against degenerate allocations (e.g. (1,1) before the
+            # widget has been laid out). Computing position/total in that
+            # state produces garbage like saved_ratio=-21000, which then
+            # corrupts session.json and breaks the next restore.
+            if total < MIN_PANE_ALLOC_PX:
+                log.warning(
+                    "[PANE-SAVE-ABORT] DualTerminalBox %s id=%s orient=%s "
+                    "position=%d alloc=(w=%d,h=%d) total=%d "
+                    "below MIN_PANE_ALLOC_PX=%d -> aborting save (will retry)",
+                    btype,
+                    id(box),
+                    "V" if box.orient is DualTerminalBox.ORIENT_V else "H",
+                    position,
+                    allocation.width,
+                    allocation.height,
+                    total,
+                    MIN_PANE_ALLOC_PX,
+                )
+                raise DegenerateAllocationError(
+                    f"DualTerminalBox id={id(box)} alloc total={total} too small "
+                    f"(<{MIN_PANE_ALLOC_PX}); aborting save"
+                )
+
+            # Ratio is stored in the historical split_percentage format:
+            # percentage allocated to the second child. split_no_save converts
+            # it back to the first-child Gtk.Paned position with 100 - ratio.
+            ratio = box.calculate_current_split_percentage()
+            box.set_stored_split_percentage(ratio)
+            log.debug(
+                "[PANE-SAVE] DualTerminalBox %s id=%s orient=%s position=%d "
+                "alloc=(w=%d,h=%d) total=%d -> saved_ratio=%d",
+                btype,
+                id(box),
+                "V" if box.orient is DualTerminalBox.ORIENT_V else "H",
+                position,
+                allocation.width,
+                allocation.height,
+                total,
+                ratio,
+            )
             panes.append({"type": btype, "directory": None, "ratio": ratio})
             self.save_box_layout(box.get_child1(), panes)
             self.save_box_layout(box.get_child2(), panes)
@@ -265,8 +339,38 @@ class RootTerminalBox(Gtk.Overlay, TerminalHolder):
                 while Gtk.events_pending():
                     Gtk.main_iteration()
 
-            # Use saved ratio if available, otherwise default to 50%
-            ratio = cur.get("ratio", 50)
+            # Use saved ratio if available, otherwise default to 50%.
+            # Defensively clamp to [1, 99]: a session.json corrupted by an
+            # earlier buggy build can hold values like -21000 or 211, which
+            # would otherwise make one pane swallow the whole window after
+            # restore (the "auto-increase" symptom).
+            raw_ratio = cur.get("ratio", 50)
+            try:
+                ratio_int = int(raw_ratio)
+            except (TypeError, ValueError):
+                log.warning(
+                    "[PANE-RESTORE-BAD-RATIO] non-numeric ratio=%r in session, "
+                    "falling back to 50",
+                    raw_ratio,
+                )
+                ratio_int = 50
+            ratio = max(1, min(99, ratio_int))
+            if ratio != raw_ratio:
+                log.warning(
+                    "[PANE-RESTORE-CLAMP] type=%s raw_ratio=%r -> clamped=%d",
+                    cur.get("type"),
+                    raw_ratio,
+                    ratio,
+                )
+            alloc_dbg = box.get_allocation()
+            log.debug(
+                "[PANE-RESTORE] type=%s ratio=%s alloc_at_split=(w=%d,h=%d) " "window_visible=%s",
+                cur.get("type"),
+                ratio,
+                alloc_dbg.width,
+                alloc_dbg.height,
+                self.guake.window.get_property("visible") if self.guake else "?",
+            )
             if cur["type"].endswith("v"):
                 box = box.split_v_no_save(ratio)
             else:
@@ -538,10 +642,21 @@ class TerminalBox(Gtk.Box, TerminalHolder):
         else:
             position = self.get_allocation().height * ((100 - split_percentage) / 100)
 
+        log.debug(
+            "[PANE-SPLIT] orient=%s split_percentage=%s alloc=(w=%d,h=%d) "
+            "computed_position=%.1f",
+            "H" if orientation == DualTerminalBox.ORIENT_H else "V",
+            split_percentage,
+            self.get_allocation().width,
+            self.get_allocation().height,
+            position,
+        )
+
         terminal_box = TerminalBox()
         terminal = notebook.terminal_spawn()
         terminal_box.set_terminal(terminal)
         dual_terminal_box = DualTerminalBox(orientation)
+        dual_terminal_box.set_stored_split_percentage(split_percentage)
         dual_terminal_box.set_position(position)
         parent.replace_child(self, dual_terminal_box)
         dual_terminal_box.set_child_first(self)
@@ -625,6 +740,7 @@ class DualTerminalBox(Gtk.Paned, TerminalHolder):
 
         self.orient = orientation
         self._save_position_timeout_id = None
+        self._stored_split_percentage = 50
         if orientation is DualTerminalBox.ORIENT_H:
             self.set_orientation(orientation=Gtk.Orientation.HORIZONTAL)
         else:
@@ -633,9 +749,127 @@ class DualTerminalBox(Gtk.Paned, TerminalHolder):
         # Connect to position change signal to save tabs when pane is resized
         self.connect("notify::position", self._on_position_changed)
 
+    def _safe_get_guake(self):
+        try:
+            return self.get_guake()
+        except (AttributeError, RuntimeError):
+            return None
+
+    def _position_save_is_suppressed(self, guake):
+        return bool(
+            guake
+            and (
+                getattr(guake, "_session_restoring", False)
+                or getattr(guake, "_pending_size_reset", False)
+                or getattr(guake, "_pane_ratio_adjusting", False)
+                or getattr(guake, "_pane_adjust_timeout_id", None) is not None
+            )
+        )
+
+    def _split_total(self):
+        allocation = self.get_allocation()
+        if self.orient is DualTerminalBox.ORIENT_V:
+            return allocation.height, allocation
+        return allocation.width, allocation
+
+    def set_stored_split_percentage(self, split_percentage):
+        try:
+            ratio = int(round(float(split_percentage)))
+        except (TypeError, ValueError):
+            ratio = 50
+        self._stored_split_percentage = max(1, min(99, ratio))
+
+    def get_stored_split_percentage(self):
+        return self._stored_split_percentage
+
+    def calculate_current_split_percentage(self):
+        total, allocation = self._split_total()
+        if total < MIN_PANE_ALLOC_PX:
+            raise DegenerateAllocationError(
+                f"DualTerminalBox id={id(self)} alloc total={total} too small "
+                f"(<{MIN_PANE_ALLOC_PX}); aborting save"
+            )
+
+        raw_ratio = 100 - (self.get_position() / total * 100)
+        ratio = max(1, min(99, int(round(raw_ratio))))
+        log.debug(
+            "[PANE-RATIO] id=%s orient=%s position=%d alloc=(w=%d,h=%d) " "total=%d -> ratio=%d",
+            id(self),
+            "V" if self.orient is DualTerminalBox.ORIENT_V else "H",
+            self.get_position(),
+            allocation.width,
+            allocation.height,
+            total,
+            ratio,
+        )
+        return ratio
+
+    def remember_current_split_percentage(self):
+        self.set_stored_split_percentage(self.calculate_current_split_percentage())
+
+    def apply_stored_split_percentage(self):
+        total, allocation = self._split_total()
+        if total < MIN_PANE_ALLOC_PX:
+            log.debug(
+                "[PANE-RATIO-APPLY-SKIP] id=%s orient=%s alloc=(w=%d,h=%d) "
+                "total=%d below MIN_PANE_ALLOC_PX=%d",
+                id(self),
+                "V" if self.orient is DualTerminalBox.ORIENT_V else "H",
+                allocation.width,
+                allocation.height,
+                total,
+                MIN_PANE_ALLOC_PX,
+            )
+            return False
+
+        position = int(total * ((100 - self._stored_split_percentage) / 100))
+        if total <= MIN_PANE_ALLOC_PX * 2:
+            position = max(1, total // 2)
+        else:
+            position = max(MIN_PANE_ALLOC_PX, min(total - MIN_PANE_ALLOC_PX, position))
+
+        log.debug(
+            "[PANE-RATIO-APPLY] id=%s orient=%s ratio=%d alloc=(w=%d,h=%d) "
+            "total=%d -> position=%d",
+            id(self),
+            "V" if self.orient is DualTerminalBox.ORIENT_V else "H",
+            self._stored_split_percentage,
+            allocation.width,
+            allocation.height,
+            total,
+            position,
+        )
+        self.set_position(position)
+        return True
+
     def _on_position_changed(self, widget, param):
         """Called when the pane divider position changes. Debounce the save to avoid
         excessive saves during continuous dragging."""
+        try:
+            pos = self.get_position()
+            alloc = self.get_allocation()
+            log.debug(
+                "[PANE-NOTIFY] notify::position id=%s orient=%s pos=%d " "alloc=(w=%d,h=%d)",
+                id(self),
+                "V" if self.orient is DualTerminalBox.ORIENT_V else "H",
+                pos,
+                alloc.width,
+                alloc.height,
+            )
+        except Exception as e:  # noqa: BLE001
+            log.debug("[PANE-NOTIFY] error reading state: %s", e)
+
+        g = self._safe_get_guake()
+        if self._position_save_is_suppressed(g):
+            log.debug("[PANE-NOTIFY] save suppressed for transient/programmatic position change")
+            return
+
+        try:
+            self.remember_current_split_percentage()
+        except DegenerateAllocationError as e:
+            log.debug("[PANE-NOTIFY] ignoring position change without allocation: %s", e)
+            return
+
         # Cancel any pending save
         if self._save_position_timeout_id is not None:
             GLib.source_remove(self._save_position_timeout_id)
@@ -647,9 +881,63 @@ class DualTerminalBox(Gtk.Paned, TerminalHolder):
         """Actually save the tabs after debounce period."""
         self._save_position_timeout_id = None
         g = self.get_guake()
-        if g and g.settings.general.get_boolean("save-tabs-when-changed"):
+        save_enabled = bool(g and g.settings.general.get_boolean("save-tabs-when-changed"))
+        session_restoring = bool(getattr(g, "_session_restoring", False)) if g else False
+        save_suppressed = self._position_save_is_suppressed(g)
+        log.debug(
+            "[PANE-SAVE-TIMER] fired id=%s save_enabled=%s session_restoring=%s "
+            "save_suppressed=%s",
+            id(self),
+            save_enabled,
+            session_restoring,
+            save_suppressed,
+        )
+        if g and save_enabled and not save_suppressed:
             g.save_tabs()
         return False  # Don't repeat the timeout
+
+    def get_split_ratio(self):
+        """Get the current split ratio as a percentage (0-100).
+
+        The ratio represents the percentage of space allocated to the FIRST child.
+        For example, a ratio of 60 means the first child gets 60% of the space.
+        """
+        position = self.get_position()
+        allocation = self.get_allocation()
+
+        if self.orient is DualTerminalBox.ORIENT_V:
+            total = allocation.height
+        else:
+            total = allocation.width
+
+        if total <= 0:
+            return 50  # Default to 50% if we can't calculate
+
+        # Position is the size of the first child
+        ratio = (position / total) * 100
+        return max(1, min(99, ratio))  # Clamp between 1% and 99%
+
+    def set_split_ratio(self, ratio):
+        """Set the split position based on a percentage ratio.
+
+        Args:
+            ratio: Percentage (0-100) of space to allocate to the first child.
+        """
+        allocation = self.get_allocation()
+
+        if self.orient is DualTerminalBox.ORIENT_V:
+            total = allocation.height
+        else:
+            total = allocation.width
+
+        if total <= 0:
+            return  # Can't set position if we don't have allocation yet
+
+        # Calculate new position from ratio
+        new_position = int((ratio / 100) * total)
+        # Ensure minimum size for both children (at least 10 pixels each)
+        new_position = max(10, min(total - 10, new_position))
+        self.set_position(new_position)
 
     def set_child_first(self, terminal_holder):
         if isinstance(terminal_holder, TerminalHolder):
