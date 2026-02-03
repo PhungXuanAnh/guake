@@ -205,7 +205,16 @@ class RootTerminalBox(Gtk.Overlay, TerminalHolder):
             return
         if isinstance(box, DualTerminalBox):
             btype = "dual" + ("_h" if box.orient is DualTerminalBox.ORIENT_V else "_v")
-            panes.append({"type": btype, "directory": None})
+            # Calculate and save the split ratio
+            position = box.get_position()
+            allocation = box.get_allocation()
+            if box.orient is DualTerminalBox.ORIENT_V:
+                total = allocation.height
+            else:
+                total = allocation.width
+            # Ratio is calculated as percentage of the first child (100 - position/total * 100)
+            ratio = int(100 - (position / total * 100)) if total > 0 else 50
+            panes.append({"type": btype, "directory": None, "ratio": ratio})
             self.save_box_layout(box.get_child1(), panes)
             self.save_box_layout(box.get_child2(), panes)
         elif isinstance(box, TerminalBox):
@@ -255,10 +264,12 @@ class RootTerminalBox(Gtk.Overlay, TerminalHolder):
                 while Gtk.events_pending():
                     Gtk.main_iteration()
 
+            # Use saved ratio if available, otherwise default to 50%
+            ratio = cur.get("ratio", 50)
             if cur["type"].endswith("v"):
-                box = box.split_v_no_save()
+                box = box.split_v_no_save(ratio)
             else:
-                box = box.split_h_no_save()
+                box = box.split_h_no_save(ratio)
             self.restore_box_layout(box.get_child1(), panes)
             self.restore_box_layout(box.get_child2(), panes)
         else:
@@ -608,10 +619,32 @@ class DualTerminalBox(Gtk.Paned, TerminalHolder):
         super().__init__()
 
         self.orient = orientation
+        self._save_position_timeout_id = None
         if orientation is DualTerminalBox.ORIENT_H:
             self.set_orientation(orientation=Gtk.Orientation.HORIZONTAL)
         else:
             self.set_orientation(orientation=Gtk.Orientation.VERTICAL)
+
+        # Connect to position change signal to save tabs when pane is resized
+        self.connect("notify::position", self._on_position_changed)
+
+    def _on_position_changed(self, widget, param):
+        """Called when the pane divider position changes. Debounce the save to avoid
+        excessive saves during continuous dragging."""
+        # Cancel any pending save
+        if self._save_position_timeout_id is not None:
+            GLib.source_remove(self._save_position_timeout_id)
+
+        # Schedule a save after 500ms of no position changes
+        self._save_position_timeout_id = GLib.timeout_add(500, self._do_save_tabs)
+
+    def _do_save_tabs(self):
+        """Actually save the tabs after debounce period."""
+        self._save_position_timeout_id = None
+        g = self.get_guake()
+        if g and g.settings.general.get_boolean("save-tabs-when-changed"):
+            g.save_tabs()
+        return False  # Don't repeat the timeout
 
     def set_child_first(self, terminal_holder):
         if isinstance(terminal_holder, TerminalHolder):

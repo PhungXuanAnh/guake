@@ -168,7 +168,9 @@ uninstall-schemas:
 	rm -f "$(DESTDIR)$(SCHEMA_DIR)/gschemas.compiled"
 
 reinstall:
-	sudo make uninstall && make && sudo make install && $(DESTDIR)$(bindir)/guake
+	sudo make uninstall && make && sudo make install 
+	guake-restore
+	$(DESTDIR)$(bindir)/guake
 
 reinstall-v:
 	sudo make uninstall && make && sudo make install && $(DESTDIR)$(bindir)/guake -v

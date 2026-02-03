@@ -109,11 +109,15 @@ https://gtkthemingguide.vercel.app/#/creating_gtk_themes?id=selectors
 
 https://guake.readthedocs.io/en/latest/contributing/dev_env.html#install-on-system
 
-`make && sudo make install`
+```shell
+make && sudo make install
+```
 
 or reinstall
 
-`make reinstall`
+```shell
+make reinstall
+```
 
 # 5. How to rename panes
 
