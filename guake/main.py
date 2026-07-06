@@ -293,6 +293,42 @@ def main():
     )
 
     parser.add_argument(
+        "--tab-contents",
+        dest="tab_contents",
+        metavar="NAME",
+        action="store",
+        default=None,
+        help=_(
+            "Print the contents of the tab whose label is NAME. "
+            "Combine with --lines to limit the output to the last N lines."
+        ),
+    )
+
+    parser.add_argument(
+        "--current-terminal-contents",
+        dest="current_terminal_contents",
+        action="store_true",
+        default=False,
+        help=_(
+            "Print the contents of the current terminal. "
+            "Combine with --lines to limit the output to the last N lines."
+        ),
+    )
+
+    parser.add_argument(
+        "--lines",
+        dest="nb_lines",
+        metavar="N",
+        action="store",
+        type=int,
+        default=0,
+        help=_(
+            "Number of trailing lines to print for --tab-contents / "
+            "--current-terminal-contents. Default is 0, meaning the whole buffer."
+        ),
+    )
+
+    parser.add_argument(
         "--bgcolor",
         dest="bgcolor",
         action="store",
@@ -581,6 +617,18 @@ def main():
     if options.uuid_index:
         selectedIndex = remote_object.get_index_from_uuid(options.uuid_index)
         sys.stdout.write(f"{selectedIndex}\n")
+        only_show_hide = options.show
+
+    if options.tab_contents is not None:
+        contents = remote_object.get_contents_from_tab_name(
+            options.tab_contents, options.nb_lines
+        )
+        sys.stdout.write(f"{contents}\n")
+        only_show_hide = options.show
+
+    if options.current_terminal_contents:
+        contents = remote_object.get_contents_current(options.nb_lines)
+        sys.stdout.write(f"{contents}\n")
         only_show_hide = options.show
 
     if options.split_vertical:

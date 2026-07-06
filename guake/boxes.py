@@ -28,12 +28,16 @@ log = logging.getLogger(__name__)
 
 # Minimum allocation (in pixels) below which a Gtk.Paned is considered to have
 # no real geometry yet. Saving a pane ratio with allocation smaller than this
-# would produce garbage values when GTK is still settling hidden/shown windows.
+# would produce garbage values (e.g. negative ratios from `position/total*100`
+# when total is 1). We treat such a state as transient and abort the save so
+# the caller can retry once the widget has been properly allocated.
 MIN_PANE_ALLOC_PX = 10
 
 
 class DegenerateAllocationError(RuntimeError):
-    """Raised when a pane has no usable allocation yet."""
+    """Raised by save_box_layout when a DualTerminalBox has no usable allocation
+    (typically alloc.width or alloc.height is 1 because the widget hasn't been
+    laid out yet). The caller should abort the save and try again later."""
 
 
 # TODO remove calls to guake

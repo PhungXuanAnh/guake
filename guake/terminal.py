@@ -181,6 +181,55 @@ class GuakeTerminal(Vte.Terminal):
             command += "\n"
         self.feed_child(command)
 
+    def _get_text_range(self, start_row, start_col, end_row, end_col):
+        """Wrapper around Vte.Terminal.get_text_range that copes with the
+        different return shapes/signatures across VTE versions."""
+        try:
+            result = self.get_text_range(start_row, start_col, end_row, end_col, None, None)
+        except TypeError:
+            # Some bindings do not expose the trailing user_data argument.
+            result = self.get_text_range(start_row, start_col, end_row, end_col, None)
+        # Depending on the VTE version the call returns either the plain
+        # string or a (text, attributes) tuple.
+        if isinstance(result, (tuple, list)):
+            return result[0]
+        return result
+
+    def get_contents(self, nb_lines: int = 0) -> str:
+        """Return the textual contents of the terminal (screen + scrollback).
+
+        If ``nb_lines`` is greater than 0, only the last ``nb_lines`` lines are
+        returned (trailing blank lines are ignored); otherwise the whole
+        available buffer is returned.
+        """
+        try:
+            column_count = self.get_column_count()
+            _, cursor_row = self.get_cursor_position()
+        except Exception:  # pragma: no cover - defensive, VTE may be gone
+            log.exception("Unable to read terminal cursor position")
+            return ""
+
+        if nb_lines and nb_lines > 0:
+            # Grab a margin above the requested amount so that any trailing
+            # blank rows (cursor sitting past the last output) do not eat into
+            # the requested line count; the precise trimming happens below.
+            start_row = max(0, cursor_row - (nb_lines * 2 + 100))
+        else:
+            start_row = 0
+
+        text = self._get_text_range(start_row, 0, cursor_row, column_count)
+        if not text:
+            return ""
+
+        lines = text.split("\n")
+        # Drop trailing blank lines produced by the cursor being past content.
+        while lines and lines[-1].strip() == "":
+            lines.pop()
+
+        if nb_lines and nb_lines > 0:
+            lines = lines[-nb_lines:]
+        return "\n".join(lines)
+
     def copy_clipboard(self):
         if self.get_has_selection():
             super().copy_clipboard()

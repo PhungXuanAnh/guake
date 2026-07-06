@@ -85,3 +85,5 @@ guake/_version.py
 guake/paths.py
 guake/paths.py.dev
 RELEASENOTES.rst
+tmp/*
+.plan-with-files

@@ -12,6 +12,9 @@
   - [5.2. Via CLI](#52-via-cli)
   - [5.3. Example: Script with named panes](#53-example-script-with-named-panes)
   - [5.4. Pane label font size](#54-pane-label-font-size)
+- [6. Read tab contents](#6-read-tab-contents)
+  - [6.1. Via CLI](#61-via-cli)
+  - [6.2. Via D-Bus](#62-via-d-bus)
 - [8. Fix window resizing and positioning when switching monitors](#8-fix-window-resizing-and-positioning-when-switching-monitors)
 - [9. Execute startup commands on session restore](#9-execute-startup-commands-on-session-restore)
 
@@ -154,6 +157,48 @@ guake -S 2 -E "cd ~/work/viralize-web/components && dlog vvm2-web-components-1" 
 Configure in Preferences → Appearance → "Pane label font size" (range: 8-24)
 
 Restart guake
+
+# 6. Read tab contents
+
+Read the text content (screen + scrollback) of a tab without switching to it.
+Useful for scripting: grabbing the output of a long-running command in another
+tab. `--lines N` limits the output to the last N lines; omit it (or use `0`) to
+get the whole buffer.
+
+> A "line" is a wrapped terminal row, matching what the terminal displays.
+> Tabs holding several panes are returned with `--- Pane N ---` headers.
+
+## 6.1. Via CLI
+
+```shell
+# Read the last 10 lines of the tab named "ez"
+guake --tab-contents ez --lines 10
+
+# Read the entire buffer of the tab named "ez"
+guake --tab-contents ez
+
+# Read the last 20 lines of the current terminal
+guake --current-terminal-contents --lines 20
+```
+
+## 6.2. Via D-Bus
+
+```shell
+# By tab name (last 10 lines)
+dbus-send --session --print-reply --type=method_call \
+  --dest=org.guake3.RemoteControl /org/guake3/RemoteControl \
+  org.guake3.RemoteControl.get_contents_from_tab_name string:'ez' int32:10
+
+# Current terminal (whole buffer)
+dbus-send --session --print-reply --type=method_call \
+  --dest=org.guake3.RemoteControl /org/guake3/RemoteControl \
+  org.guake3.RemoteControl.get_contents_current int32:0
+
+# By tab index (last 10 lines)
+dbus-send --session --print-reply --type=method_call \
+  --dest=org.guake3.RemoteControl /org/guake3/RemoteControl \
+  org.guake3.RemoteControl.get_contents_from_tab int32:0 int32:10
+```
 
 # 8. Fix window resizing and positioning when switching monitors
 

@@ -166,6 +166,60 @@ class DbusManager(dbus.service.Object):
     def get_tab_name(self, tab_index=0):
         return self.guake.get_notebook().get_tab_text_index(tab_index)
 
+    @staticmethod
+    def _terminals_contents(terminals, nb_lines):
+        """Return the concatenated contents of the given terminals.
+
+        When a tab holds several panes, each pane's output is prefixed with a
+        header so the caller can tell them apart.
+        """
+        if not terminals:
+            return ""
+        if len(terminals) == 1:
+            return terminals[0].get_contents(nb_lines)
+        chunks = []
+        for i, term in enumerate(terminals):
+            chunks.append(f"--- Pane {i} ---\n" + term.get_contents(nb_lines))
+        return "\n".join(chunks)
+
+    @dbus.service.method(DBUS_NAME, in_signature="i", out_signature="s")
+    def get_contents_current(self, nb_lines=0):
+        """Return the contents of the current terminal.
+
+        ``nb_lines`` limits the output to the last N lines (0 = whole buffer).
+        """
+        terminal = self.guake.get_notebook().get_current_terminal()
+        if not terminal:
+            return ""
+        return terminal.get_contents(nb_lines)
+
+    @dbus.service.method(DBUS_NAME, in_signature="ii", out_signature="s")
+    def get_contents_from_tab(self, tab_index=0, nb_lines=0):
+        """Return the contents of the tab at ``tab_index``.
+
+        ``nb_lines`` limits the output to the last N lines (0 = whole buffer).
+        """
+        notebook = self.guake.get_notebook()
+        if not 0 <= tab_index < notebook.get_n_pages():
+            return ""
+        return self._terminals_contents(
+            notebook.get_terminals_for_page(tab_index), nb_lines
+        )
+
+    @dbus.service.method(DBUS_NAME, in_signature="si", out_signature="s")
+    def get_contents_from_tab_name(self, tab_name, nb_lines=0):
+        """Return the contents of the first tab whose label matches ``tab_name``.
+
+        ``nb_lines`` limits the output to the last N lines (0 = whole buffer).
+        """
+        notebook = self.guake.get_notebook()
+        for i in range(notebook.get_n_pages()):
+            if notebook.get_tab_text_index(i) == tab_name:
+                return self._terminals_contents(
+                    notebook.get_terminals_for_page(i), nb_lines
+                )
+        return ""
+
     @dbus.service.method(DBUS_NAME, in_signature="ss")
     def rename_tab_uuid(self, tab_uuid, new_text):
         self.guake.rename_tab_uuid(tab_uuid, new_text, True)

@@ -228,6 +228,11 @@ class Guake(SimpleGladeApp):
         # widgets did not have a real allocation yet.
         self._pending_save_tabs_id = None
 
+        # Coalescing token for deferred save_tabs() retries scheduled by
+        # _reschedule_save_tabs() when a save was aborted because pane
+        # widgets did not have a real allocation yet.
+        self._pending_save_tabs_id = None
+
         # Start the file manager (only used by guake.yml so far).
         self.fm = FileManager()
 
@@ -1845,7 +1850,9 @@ class Guake(SimpleGladeApp):
         return True
 
     def _reschedule_save_tabs(self, filename="session.json"):
-        """Schedule a single deferred save_tabs() call."""
+        """Schedule a single deferred save_tabs() call. Coalesces multiple
+        reschedule requests so we don't queue dozens of pending saves.
+        """
         if getattr(self, "_pending_save_tabs_id", None) is not None:
             log.debug("[SAVE-TABS-RESCHEDULE] already pending, skipping")
             return
@@ -1857,7 +1864,7 @@ class Guake(SimpleGladeApp):
                 self.save_tabs(filename)
             except Exception:  # noqa: BLE001
                 log.exception("[SAVE-TABS-RESCHEDULE] deferred save_tabs failed")
-            return False
+            return False  # don't repeat
 
         self._pending_save_tabs_id = GLib.timeout_add(250, _do_pending_save)
         log.debug("[SAVE-TABS-RESCHEDULE] scheduled deferred save in 250ms")
