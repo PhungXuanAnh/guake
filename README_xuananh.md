@@ -15,6 +15,10 @@
 - [6. Read tab contents](#6-read-tab-contents)
   - [6.1. Via CLI](#61-via-cli)
   - [6.2. Via D-Bus](#62-via-d-bus)
+- [7. Send text to a tab by name and press Enter](#7-send-text-to-a-tab-by-name-and-press-enter)
+  - [7.1. Via CLI](#71-via-cli)
+  - [7.2. Via D-Bus](#72-via-d-bus)
+  - [7.3. Implementation notes](#73-implementation-notes)
 - [8. Fix window resizing and positioning when switching monitors](#8-fix-window-resizing-and-positioning-when-switching-monitors)
 - [9. Execute startup commands on session restore](#9-execute-startup-commands-on-session-restore)
 
@@ -199,6 +203,80 @@ dbus-send --session --print-reply --type=method_call \
   --dest=org.guake3.RemoteControl /org/guake3/RemoteControl \
   org.guake3.RemoteControl.get_contents_from_tab int32:0 int32:10
 ```
+
+# 7. Send text to a tab by name and press Enter
+
+refer to commit: `Send text to a tab by name and press Enter` for more detail
+
+Guake can now send text directly to a tab by label, without scripts having to
+scan tab indices with `guake -s INDEX` and compare labels with `guake -l`.
+
+The new commands find the first tab whose label exactly matches the given name,
+select that tab, focus the tab's last-focused pane, and fall back to the first
+pane if no last-focused pane is known. There are separate actions for sending
+text and pressing Enter, plus a convenience action that does both.
+
+Enter is sent as carriage return (`\r`). This matters for TUI apps such as
+Claude Code, REPLs, and prompts that treat line feed (`\n`) as "insert a new
+line" instead of "submit".
+
+If no matching tab exists, the CLI prints an error and exits non-zero.
+
+## 7.1. Via CLI
+
+```shell
+# Type text only in the tab named "ez"
+guake --send-text-tab-name ez "continue"
+
+# Press Enter only in the tab named "ez"
+guake --send-enter-tab-name ez
+
+# Convenience wrapper: type "continue" and press Enter
+guake --execute-tab-name ez "continue"
+```
+
+For scripts, this replaces the old pattern of selecting every tab by index,
+checking the label, running `guake -E "continue"`, then sending `guake -E $'\r'`:
+
+```shell
+TAB_NAME="ez"
+
+# Split actions
+guake --send-text-tab-name "$TAB_NAME" "continue"
+guake --send-enter-tab-name "$TAB_NAME"
+
+# Or the combined action
+guake --execute-tab-name "$TAB_NAME" "continue"
+```
+
+## 7.2. Via D-Bus
+
+```shell
+# Send text only
+dbus-send --session --print-reply --type=method_call \
+  --dest=org.guake3.RemoteControl /org/guake3/RemoteControl \
+  org.guake3.RemoteControl.send_text_to_tab_name string:'ez' string:'continue'
+
+# Press Enter only
+dbus-send --session --print-reply --type=method_call \
+  --dest=org.guake3.RemoteControl /org/guake3/RemoteControl \
+  org.guake3.RemoteControl.send_enter_to_tab_name string:'ez'
+
+# Type text and press Enter
+dbus-send --session --print-reply --type=method_call \
+  --dest=org.guake3.RemoteControl /org/guake3/RemoteControl \
+  org.guake3.RemoteControl.execute_command_in_tab_name string:'ez' string:'continue'
+```
+
+## 7.3. Implementation notes
+
+- `guake/main.py` adds `--send-text-tab-name NAME TEXT`,
+  `--send-enter-tab-name NAME`, and `--execute-tab-name NAME COMMAND`.
+- `guake/dbusiface.py` exposes `send_text_to_tab_name(tab_name, text)`,
+  `send_enter_to_tab_name(tab_name)`, and
+  `execute_command_in_tab_name(tab_name, command)`.
+- `guake/guake_app.py` implements the tab lookup, pane selection, focus, and
+  carriage-return Enter behavior.
 
 # 8. Fix window resizing and positioning when switching monitors
 

@@ -284,6 +284,36 @@ def main():
     )
 
     parser.add_argument(
+        "--send-text-tab-name",
+        dest="send_text_tab_name",
+        nargs=2,
+        metavar=("NAME", "TEXT"),
+        default=None,
+        help=_("Send TEXT to the first tab whose label is NAME without pressing Enter."),
+    )
+
+    parser.add_argument(
+        "--send-enter-tab-name",
+        dest="send_enter_tab_name",
+        metavar="NAME",
+        action="store",
+        default=None,
+        help=_("Press Enter in the first tab whose label is NAME."),
+    )
+
+    parser.add_argument(
+        "--execute-tab-name",
+        dest="command_tab_name",
+        nargs=2,
+        metavar=("NAME", "COMMAND"),
+        default=None,
+        help=_(
+            "Execute COMMAND in the first tab whose label is NAME. "
+            "This types COMMAND and sends Enter."
+        ),
+    )
+
+    parser.add_argument(
         "-i",
         "--tab-index",
         dest="tab_index",
@@ -669,6 +699,29 @@ def main():
 
     if options.command_current:
         remote_object.execute_command_current(options.command_current)
+        only_show_hide = options.show
+
+    if options.send_text_tab_name is not None:
+        tab_name, text = options.send_text_tab_name
+        sent = remote_object.send_text_to_tab_name(tab_name, text)
+        if not sent:
+            sys.stderr.write(f"no Guake tab named {tab_name!r}\n")
+            sys.exit(1)
+        only_show_hide = options.show
+
+    if options.send_enter_tab_name is not None:
+        sent = remote_object.send_enter_to_tab_name(options.send_enter_tab_name)
+        if not sent:
+            sys.stderr.write(f"no Guake tab named {options.send_enter_tab_name!r}\n")
+            sys.exit(1)
+        only_show_hide = options.show
+
+    if options.command_tab_name is not None:
+        tab_name, command = options.command_tab_name
+        executed = remote_object.execute_command_in_tab_name(tab_name, command)
+        if not executed:
+            sys.stderr.write(f"no Guake tab named {tab_name!r}\n")
+            sys.exit(1)
         only_show_hide = options.show
 
     if options.tab_index and options.rename_tab:

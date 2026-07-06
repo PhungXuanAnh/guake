@@ -516,6 +516,52 @@ class Guake(SimpleGladeApp):
         terminal.startup_command = command.rstrip("\r\n")
         terminal.feed_child(command)
 
+    @staticmethod
+    def _append_enter(command):
+        if command.endswith(("\r", "\n")):
+            return command
+        return f"{command}\r"
+
+    def send_text_to_tab_name(self, tab_name, text, press_enter=False, record_as_startup=False):
+        """Send text to the first tab whose label exactly matches tab_name.
+
+        The target is that tab's last-focused terminal, falling back to its
+        first terminal. If press_enter is true, append a carriage return so TUI
+        applications receive a real Enter key. If record_as_startup is true, the
+        text is remembered as the terminal's startup_command so it is saved to
+        session.json and re-run on restore.
+        """
+        notebook = self.get_notebook()
+        for page_index in range(notebook.get_n_pages()):
+            if notebook.get_tab_text_index(page_index) != tab_name:
+                continue
+
+            terminals = notebook.get_terminals_for_page(page_index)
+            if not terminals:
+                return False
+
+            page = notebook.get_nth_page(page_index)
+            terminal = getattr(page, "last_terminal_focused", None)
+            if terminal not in terminals:
+                terminal = terminals[0]
+            notebook.set_current_page(page_index)
+            terminal.grab_focus()
+            if record_as_startup:
+                terminal.startup_command = text.rstrip("\r\n")
+            terminal.feed_child(self._append_enter(text) if press_enter else text)
+            return True
+        return False
+
+    def execute_command_in_tab_name(self, tab_name, command):
+        """Type command in a tab selected by label and press Enter."""
+        return self.send_text_to_tab_name(
+            tab_name, command, press_enter=True, record_as_startup=True
+        )
+
+    def send_enter_to_tab_name(self, tab_name):
+        """Press Enter in a tab selected by label."""
+        return self.send_text_to_tab_name(tab_name, "\r")
+
     def execute_command_by_uuid(self, tab_uuid, command):
         """Execute the `command' in the tab whose terminal has the `tab_uuid' uuid"""
         if command[-1] != "\n":

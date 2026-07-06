@@ -156,6 +156,98 @@ def test_guake_restore_tabs_schema_broken_session_file(g, fs):
     assert guake.guake_app.traceback.print_exc.call_count == 1
 
 
+class FakeTerminal:
+    def __init__(self):
+        self.focused = False
+        self.input = []
+
+    def grab_focus(self):
+        self.focused = True
+
+    def feed_child(self, text):
+        self.input.append(text)
+
+
+class FakePage:
+    def __init__(self, label, terminals, last_terminal_focused=None):
+        self.label = label
+        self.terminals = terminals
+        self.last_terminal_focused = last_terminal_focused
+
+
+class FakeNotebook:
+    def __init__(self, pages):
+        self.pages = pages
+        self.current_page = None
+
+    def get_n_pages(self):
+        return len(self.pages)
+
+    def get_tab_text_index(self, index):
+        return self.pages[index].label
+
+    def get_terminals_for_page(self, index):
+        return self.pages[index].terminals
+
+    def get_nth_page(self, index):
+        return self.pages[index]
+
+    def set_current_page(self, index):
+        self.current_page = index
+
+
+def test_execute_command_in_tab_name_sends_enter_to_named_tab():
+    first_terminal = FakeTerminal()
+    target_terminal = FakeTerminal()
+    notebook = FakeNotebook(
+        [
+            FakePage("other", [FakeTerminal()]),
+            FakePage("ez", [first_terminal, target_terminal], target_terminal),
+        ]
+    )
+    app = object.__new__(Guake)
+    app.get_notebook = lambda: notebook
+
+    assert app.execute_command_in_tab_name("ez", "continue")
+    assert notebook.current_page == 1
+    assert target_terminal.focused
+    assert target_terminal.input == ["continue\r"]
+    assert first_terminal.input == []
+
+
+def test_send_text_to_tab_name_does_not_press_enter():
+    terminal = FakeTerminal()
+    notebook = FakeNotebook([FakePage("ez", [terminal])])
+    app = object.__new__(Guake)
+    app.get_notebook = lambda: notebook
+
+    assert app.send_text_to_tab_name("ez", "continue")
+    assert terminal.focused
+    assert terminal.input == ["continue"]
+
+
+def test_send_enter_to_tab_name_only_sends_enter():
+    terminal = FakeTerminal()
+    notebook = FakeNotebook([FakePage("ez", [terminal])])
+    app = object.__new__(Guake)
+    app.get_notebook = lambda: notebook
+
+    assert app.send_enter_to_tab_name("ez")
+    assert terminal.focused
+    assert terminal.input == ["\r"]
+
+
+def test_execute_command_in_tab_name_returns_false_for_missing_tab():
+    terminal = FakeTerminal()
+    notebook = FakeNotebook([FakePage("ez", [terminal])])
+    app = object.__new__(Guake)
+    app.get_notebook = lambda: notebook
+
+    assert not app.execute_command_in_tab_name("missing", "continue")
+    assert notebook.current_page is None
+    assert terminal.input == []
+
+
 def test_guake_save_tabs_and_restore(mocker, g, fs):
     # Disable auto save
     mocker.patch.object(g.settings.general, "get_boolean", return_value=False)

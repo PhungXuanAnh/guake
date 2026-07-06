@@ -162,6 +162,18 @@ class DbusManager(dbus.service.Object):
     def execute_command_current(self, command):
         self.guake.execute_command(command)
 
+    @dbus.service.method(DBUS_NAME, in_signature="ss", out_signature="b")
+    def send_text_to_tab_name(self, tab_name, text):
+        return self.guake.send_text_to_tab_name(tab_name, text)
+
+    @dbus.service.method(DBUS_NAME, in_signature="s", out_signature="b")
+    def send_enter_to_tab_name(self, tab_name):
+        return self.guake.send_enter_to_tab_name(tab_name)
+
+    @dbus.service.method(DBUS_NAME, in_signature="ss", out_signature="b")
+    def execute_command_in_tab_name(self, tab_name, command):
+        return self.guake.execute_command_in_tab_name(tab_name, command)
+
     @dbus.service.method(DBUS_NAME, in_signature="i", out_signature="s")
     def get_tab_name(self, tab_index=0):
         return self.guake.get_notebook().get_tab_text_index(tab_index)
